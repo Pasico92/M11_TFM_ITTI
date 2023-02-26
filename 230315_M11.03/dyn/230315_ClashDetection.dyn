@@ -1,0 +1,1198 @@
+{
+  "Uuid": "d4ac5a11-7029-457b-aceb-488afed88b59",
+  "IsCustomNode": false,
+  "Description": null,
+  "Name": "230315_ClashDetection",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef buscar_archivosPorExtension(ruta, extension, sub=False):\r\n\r\n\t# Uso: Buscar todos los archivos en una ruta y con una extension dadas\r\n\t# Entradas:\r\n\t\t# ruta\r\n\t\t# extension\r\n\t\t# sub\r\n\t\t# bkup\r\n\t# Salidas:\r\n\r\n\tsalida, valido, invalido, totalArchivos = [], [], [], []\r\n\r\n\t# Se recorren subcarpetas\r\n\tif sub:\r\n\t\tfor ruta, carpetas, archivos in os.walk(ruta):\r\n\t\t\tfor archivo in archivos:\r\n\t\t\t\t# Agrupamos archivos con extension buscada\r\n\t\t\t\tif archivo.endswith(extension):\r\n\t\t\t\t\tvalido.append(archivo)\r\n\t\t\t\t# Agrupamos resto de archivos\r\n\t\t\t\telse:\r\n\t\t\t\t\tinvalido.append(archivo)\r\n\t\t\t\ttotalArchivos.append(archivo)\r\n\r\n\t\t# Comprobamos que haya archivos de la extension buscada\r\n\t\t# Caso1: No hay archivos\r\n\t\tif len(totalArchivos) == len(invalido):\r\n\t\t\tsalida = \"No hay archivos con la extension dada\"\r\n\t\t# Caso2: Si hay archivos\r\n\t\telse:\r\n\t\t\t# Vemos si hay archivos repetidos con la extension buscada\r\n\t\t\tunicos = set(valido)\r\n\t\t\t# Caso1: No hay archivos repetidos\r\n\t\t\tif len(unicos) == len(valido):\r\n\t\t\t\tfor a in valido:\r\n\t\t\t\t\tif extension == \".rvt\" or extension == \"rvt\":\r\n\t\t\t\t\t\tif \".00\" not in a:\r\n\t\t\t\t\t\t\tsalida.append(a)\r\n\t\t\t\t\t\telse:\r\n\t\t\t\t\t\t\tpass\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tsalida.append(a)\r\n\t\t\t# Caso2: Si hay archivos repetidos\r\n\t\t\telse:\r\n\t\t\t\tduplicados, todos = [], []\r\n\t\t\t\tfor a in valido:\r\n\t\t\t\t\tif a not in todos:\r\n\t\t\t\t\t\ttodos.append(a)\r\n\t\t\t\t\telif a in todos and a not in duplicados:\r\n\t\t\t\t\t\tduplicados.append(a)\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tpass\r\n\t\t\t\tfor d in duplicados:\r\n\t\t\t\t\tsalida.append(\"El archivo {} se encuentra en varias carpetas\".format(d))\r\n\r\n\t# No se recorren subcarpetas\r\n\telse:\r\n\t\tfor item in os.listdir(ruta):\r\n\t\t\tif item.endswith(extension):\r\n\t\t\t\tvalido.append(item)\r\n\t\t\telse:\r\n\t\t\t\tinvalido.append(item)\r\n\r\n\t\tif len(os.listdir(ruta)) == len(invalido):\r\n\t\t\tsalida = \"No hay archivos con la extension dada\"\r\n\t\telse:\r\n\t\t\tfor i in valido:\r\n\t\t\t\tif extension == \".rvt\" or extension == \"rvt\":\r\n\t\t\t\t\tif \".00\" not in i:\r\n\t\t\t\t\t\tsalida.append(i)\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tpass\r\n\t\t\t\telse:\r\n\t\t\t\t\tsalida.append(i)\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef recargar_Vinculos():\r\n\r\n\t# Uso: Recargar los vinculos en un modelo federado\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, enlaces, vinculos, vincNombre = [], [], [], []\r\n\t\r\n\t# Colectamos tipos de vinculo\r\n\tvincTipo = FilteredElementCollector(doc).OfClass(RevitLinkType) # TiposVinculo\r\n\r\n\t# Comprobamos que el modelo tenga vinculos\r\n\tif bool(vincTipo):\r\n\r\n\t\t# Descartamos los anidamientos\r\n\t\tfor x in vincTipo:\r\n\t\t\tif x.IsNestedLink:\r\n\t\t\t\tenlaces.append(x) # anidamientos\r\n\t\t\telse:\r\n\t\t\t\tvinculos.append(x) # vinculos\r\n\t\r\n\t\tfor v in vinculos:\r\n\t\t\t# Consultamos los nombres de los vinculos (descartando anidamientos)\r\n\t\t\tvincTipoNombre = v.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString()\r\n\t\t\tvincNombre.append(vincTipoNombre)\r\n\t\r\n\t\t\t# Comprobamos el estado de los vinculos (descartando anidamientos)\r\n\t\t\testado = v.GetLinkedFileStatus()\r\n\t\r\n\t\t\t# Caso1: Vinculo ya cargado\r\n\t\t\tif estado == LinkedFileStatus.Loaded:\r\n\t\t\t\tsalida.append(\"El vinculo {} esta ya cargado\".format(vincTipoNombre))\r\n\t\r\n\t\t\t# Caso2: Vinculo descargado\r\n\t\t\telif estado == LinkedFileStatus.Unloaded:\r\n\t\t\t\t# Accedemos a todos los archivos del directorio para comprobar su ubicacion\r\n\t\t\t\tarchivos = buscar_archivosPorExtension(ruta, extension, sub=False) # rutas de los archivos rvt\r\n\r\n\t\t\t\t# Caso1: El vinculo se encuentra en el directorio\r\n\t\t\t\tif vincTipoNombre in archivos:\r\n\t\t\t\t\trutaArchivo = os.path.join(ruta, vincTipoNombre)\r\n\t\t\t\t\tmodelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(rutaArchivo)\r\n\t\t\t\t\taccion = v.LoadFrom(modelPath, None)\r\n\t\t\t\t\t# Si el vinculo ha sido cargado\r\n\t\t\t\t\tif accion.LoadResult == LinkLoadResultType.LinkLoaded:\r\n\t\t\t\t\t\tsalida.append(\"El vinculo {} ha sido cargado\".format(vincTipoNombre))\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tsalida.append(\"El vinculo {} no ha sido cargado\".format(vincTipoNombre))\r\n\r\n\t\t\t\t# Caso2: El vinculo no se encuentra en el directorio\r\n\t\t\t\telse:\r\n\t\t\t\t\tsalida.append(\"El vinculo {} no se encuentra en el directorio\".format(vincTipoNombre))\r\n\r\n\telse:\r\n\t\tsalida = \"El modelo no tiene ningun vinculo linkado\"\r\n\r\n\treturn vinculos, vincNombre, enlaces\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nruta = IN[0] # ruta de los links\r\nextension = IN[1] # extension archivos funcion\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = recargar_Vinculos()",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "0cd857003a6046d1ab7fdf6bd8220729",
+      "Inputs": [
+        {
+          "Id": "9a8762dc10f14415937273ad9974b1d3",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "a6cd261f841040b29a7d8a3f4a3dce73",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "1583ec9bb92442e087ffccfca01c9228",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "NodeType": "StringInputNode",
+      "InputValue": "C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\WIP",
+      "Id": "1bd95732cc224675976f57729d24369f",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "9c31e710ffa842e383280f2ad462e04f",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Crea una cadena"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CodeBlockNodeModel, DynamoCore",
+      "NodeType": "CodeBlockNode",
+      "Code": "\"rvt\";",
+      "Id": "c994c219cfbf456baacf293a9fb6b0bb",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "de7bcd427cec4310a465b4eae33245a3",
+          "Name": "",
+          "Description": "Valor de la expresión en la línea 1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Permite creación directa de código de DesignScript"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef crear_Vista3DPorVinculo():\r\n\r\n\t# Uso: Crear una vista 3D por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, vincLoadNombres, vistas3D, vistas3DNombres = [], [], [], []\r\n\r\n\t# Entradas\r\n\tvincTipo = vinculos # IN[0]\r\n\r\n\t# Comprobamos que exista IN[0]\r\n\tif bool(vincTipo):\r\n\r\n\t\t# Consultamos los nombres de las vistas3D que existen en el doc\r\n\t\tv3DDocNombres = [v.Name for v in FilteredElementCollector(doc).OfClass(View3D)]\r\n\r\n\t\tfor v in vincTipo:\r\n\r\n\t\t\t# Almacenamos los nombres de los vinculos cargados\r\n\t\t\tvlNombre = v.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString()\r\n\t\t\tvincLoadNombres.append(vlNombre)\r\n\r\n\t\t\t# Definimos el nombre de las vistas a crear\r\n\t\t\tv3DNombre = vlNombre.split(\".\")[0] + \"_Vinculo\"\r\n\r\n\t\t\t# Comprobamos que estos nombres no existen\r\n\t\t\tif v3DNombre not in v3DDocNombres:\r\n\r\n\t\t\t\t# Obtenemos el Id del tipo vista3D a crear\r\n\t\t\t\t# Colectamos tipos vista\r\n\t\t\t\ttiposVista = FilteredElementCollector(doc).OfClass(ViewFamilyType).ToElements() # tipos\r\n\t\t\t\t# Obtenemos familias de tipos vista\r\n\t\t\t\ttiposVistaNombres = [x.ViewFamily for x in tiposVista] # familias\r\n\t\t\t\t# Obtenemos Id del tipo vista 3D\r\n\t\t\t\ttipoVista3DId = [x.Id for x in tiposVista if str(x.ViewFamily) == \"ThreeDimensional\"][0] # IdVista3D\r\n\r\n\t\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t\t# abrimos transaccion\r\n\r\n\t\t\t\t# Creamos las vistas\r\n\t\t\t\tv3D = View3D.CreateIsometric(doc, tipoVista3DId)\r\n\t\t\t\tvistas3D.append(v3D)\r\n\r\n\t\t\t\t# Clasificamos las vistas\r\n\t\t\t\tv3D.LookupParameter(\"Clasificacion01\").Set(\"Trabajo\")\r\n\t\t\t\tv3D.LookupParameter(\"Clasificacion02\").Set(\"Auditoria\")\r\n\r\n\t\t\t\t# Renombramos las vistas\r\n\t\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\t\tv3D.get_Parameter(parVN).Set(v3DNombre)\r\n\t\t\t\tvistas3DNombres.append(v3DNombre)\r\n\r\n\t\t\t\tsalida.append(\"La vista {} ha sido creada\".format(str(v3DNombre)))\r\n\r\n\t\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t\t# cerramos transaccion\r\n\r\n\t\t\telse:\r\n\t\t\t\tvistas3DExist = FilteredElementCollector(doc).OfClass(View3D)\r\n\t\t\t\tfor v in vistas3DExist:\r\n\t\t\t\t\tif v.Name == v3DNombre:\r\n\t\t\t\t\t\tvistas3D.append(v)\r\n\t\t\t\t\t\tvistas3DNombres.append(v)\r\n\r\n\t\t\t\tsalida.append(\"La vista {} ya existe\".format(str(v3DNombre)))\r\n\r\n\telse:\r\n\t\tsalida = \"El modelo no tiene ningun vinculo linkado\"\r\n\r\n\treturn vistas3D\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nvinculos = UnwrapElement(IN[0][0]) # vinculos\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = crear_Vista3DPorVinculo()",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "075e2f9dc698407e8d06fa6f8621366a",
+      "Inputs": [
+        {
+          "Id": "ebb46fcec75b46e8850e31d13ac07337",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "71779893d320446fadfbe9ea56ee5ac1",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef crear_PlantillaPorVinculo():\r\n\r\n\t# Uso: Crear una plantilla por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, v3DNombres, planVista, planVistaNombres, planVistaId = [], [], [], [], []\r\n\r\n\t# Entradas\r\n\tvistas3D = vistas # IN[0]\r\n\r\n\t# Comprobamos que exista IN[0]\r\n\tif bool(vistas3D):\r\n\r\n\t\t# Consultamos los nombres de las plantillas que existen en el doc\r\n\t\tvp3DDocNombres = [v.Name for v in FilteredElementCollector(doc).OfClass(View3D) if v.IsTemplate]\r\n\r\n\t\tfor v in vistas3D:\r\n\r\n\t\t\t# Almacenamos los nombres de las vistas\r\n\t\t\tv3DNombre = v.get_Parameter(BuiltInParameter.VIEW_NAME).AsString()\r\n\t\t\tv3DNombres.append(v3DNombre)\r\n\r\n\t\t\t# Definimos el nombre de las plantillas a crear\r\n\t\t\tvpNombre = v3DNombre.split(\"_\")[0] + \"_Plantilla3D\"\r\n\t\t\t\r\n\t\t\t# Comprobamos que estos nombres no existen\r\n\t\t\tif vpNombre not in vp3DDocNombres:\r\n\r\n\t\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t\t# abrimos transaccion\r\n\r\n\t\t\t\t# Creamos las plantillas\r\n\t\t\t\tvp = v.CreateViewTemplate()\r\n\t\t\t\tplanVista.append(vp)\r\n\t\t\t\tplanVistaId.append(vp.Id)\r\n\r\n\t\t\t\t# Renombramos las plantillas\r\n\t\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\t\tvp.get_Parameter(parVN).Set(vpNombre)\r\n\t\t\t\tplanVistaNombres.append(vpNombre)\r\n\r\n\t\t\t\tsalida.append(\"La plantilla {} ha sido creada\".format(str(vpNombre)))\r\n\r\n\t\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t\t# cerramos transaccion\r\n\r\n\t\t\telse:\r\n\t\t\t\tvistas3DExist = FilteredElementCollector(doc).OfClass(View3D)\r\n\t\t\t\tfor v in vistas3DExist:\r\n\t\t\t\t\tif v.Name == vpNombre and v.IsTemplate:\r\n\t\t\t\t\t\tplanVista.append(v)\r\n\t\t\t\t\t\tplanVistaNombres.append(v.Name)\r\n\t\t\t\t\t\tplanVistaId.append(v.Id)\r\n\r\n\t\t\t\tsalida.append(\"La plantilla {} ya existe\".format(str(vpNombre)))\r\n\r\n\telse:\r\n\t\tsalida = \"Se han borrado las vistas de Auditoria\"\r\n\r\n\treturn planVistaId, planVistaNombres\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nvistas = UnwrapElement(IN[0]) # vistas3D\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = crear_PlantillaPorVinculo()",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "3740a1e4fd6f425fbf2406c8e130c7de",
+      "Inputs": [
+        {
+          "Id": "d24a1b7ae12843d4a32aa7d84a3c73ed",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "fb97db2cedc04065a55a76baf8569c30",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef aplicar_PlantillaPorVinculo():\r\n\r\n\t# Uso: Aplicar plantilla por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida = []\r\n\r\n\t# Entradas\r\n\tplantvistas3DId = plantillaId # IN[0][0]\r\n\tplantNombresvistas3D = plantillaNombres # IN[0][1]\r\n\tvistas3D = vistas # IN[1]\r\n\r\n\tif bool(vistas3D) and bool(plantvistas3DId) and bool(plantNombresvistas3D):\r\n\r\n\t\tfor v,vpId,vpn in zip(vistas3D, plantvistas3DId, plantNombresvistas3D):\r\n\r\n\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t# abrimos transaccion\r\n\r\n\t\t\t# Aplicamos las plantillas de vista si cumplimos la condicion\r\n\t\t\tif v.Name.split(\"_\")[0] == vpn.split(\"_\")[0]:\r\n\r\n\t\t\t\tparVT = BuiltInParameter.VIEW_TEMPLATE\r\n\t\t\t\tv.get_Parameter(parVT).Set(vpId)\r\n\t\t\t\tsalida.append(\"Se ha aplicado la plantilla {} en la vista {}\".format(vpn, v.Name))\r\n\r\n\t\t\telse:\r\n\t\t\t\tsalida.append(\"No se encuentra la vista buscada\")\r\n\r\n\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t# cerramos transaccion\r\n\r\n\telse:\r\n\t\tsalida = \"No existen las vistas de Auditoria\"\r\n\r\n\treturn salida\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nplantillaId = UnwrapElement(IN[0][0]) # plantillasvista3D\r\nplantillaNombres = UnwrapElement(IN[0][1]) # plantillasvista3Dnombre\r\nvistas = UnwrapElement(IN[1]) # vistas3D\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = aplicar_PlantillaPorVinculo()",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "13a2acb9f5a0411c8aa886be14e9a307",
+      "Inputs": [
+        {
+          "Id": "3088eea519df429084abe627506f71b5",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "22714c4dc8474fd2b6731e391f0f78d9",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "be488006b6cc42bfb137e251f51de8e4",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef buscar_archivosPorExtension(ruta, extension, sub=False):\r\n\r\n\t# Uso: Buscar todos los archivos en una ruta y con una extension dadas\r\n\t# Entradas:\r\n\t\t# ruta\r\n\t\t# extension\r\n\t\t# sub\r\n\t\t# bkup\r\n\t# Salidas:\r\n\r\n\tsalida, valido, invalido, totalArchivos = [], [], [], []\r\n\r\n\t# Se recorren subcarpetas\r\n\tif sub:\r\n\t\tfor ruta, carpetas, archivos in os.walk(ruta):\r\n\t\t\tfor archivo in archivos:\r\n\t\t\t\t# Agrupamos archivos con extension buscada\r\n\t\t\t\tif archivo.endswith(extension):\r\n\t\t\t\t\tvalido.append(archivo)\r\n\t\t\t\t# Agrupamos resto de archivos\r\n\t\t\t\telse:\r\n\t\t\t\t\tinvalido.append(archivo)\r\n\t\t\t\ttotalArchivos.append(archivo)\r\n\r\n\t\t# Comprobamos que haya archivos de la extension buscada\r\n\t\t# Caso1: No hay archivos\r\n\t\tif len(totalArchivos) == len(invalido):\r\n\t\t\tsalida = \"No hay archivos con la extension dada\"\r\n\t\t# Caso2: Si hay archivos\r\n\t\telse:\r\n\t\t\t# Vemos si hay archivos repetidos con la extension buscada\r\n\t\t\tunicos = set(valido)\r\n\t\t\t# Caso1: No hay archivos repetidos\r\n\t\t\tif len(unicos) == len(valido):\r\n\t\t\t\tfor a in valido:\r\n\t\t\t\t\tif extension == \".rvt\" or extension == \"rvt\":\r\n\t\t\t\t\t\tif \".00\" not in a:\r\n\t\t\t\t\t\t\tsalida.append(a)\r\n\t\t\t\t\t\telse:\r\n\t\t\t\t\t\t\tpass\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tsalida.append(a)\r\n\t\t\t# Caso2: Si hay archivos repetidos\r\n\t\t\telse:\r\n\t\t\t\tduplicados, todos = [], []\r\n\t\t\t\tfor a in valido:\r\n\t\t\t\t\tif a not in todos:\r\n\t\t\t\t\t\ttodos.append(a)\r\n\t\t\t\t\telif a in todos and a not in duplicados:\r\n\t\t\t\t\t\tduplicados.append(a)\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tpass\r\n\t\t\t\tfor d in duplicados:\r\n\t\t\t\t\tsalida.append(\"El archivo {} se encuentra en varias carpetas\".format(d))\r\n\r\n\t# No se recorren subcarpetas\r\n\telse:\r\n\t\tfor item in os.listdir(ruta):\r\n\t\t\tif item.endswith(extension):\r\n\t\t\t\tvalido.append(item)\r\n\t\t\telse:\r\n\t\t\t\tinvalido.append(item)\r\n\r\n\t\tif len(os.listdir(ruta)) == len(invalido):\r\n\t\t\tsalida = \"No hay archivos con la extension dada\"\r\n\t\telse:\r\n\t\t\tfor i in valido:\r\n\t\t\t\tif extension == \".rvt\" or extension == \"rvt\":\r\n\t\t\t\t\tif \".00\" not in i:\r\n\t\t\t\t\t\tsalida.append(i)\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tpass\r\n\t\t\t\telse:\r\n\t\t\t\t\tsalida.append(i)\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef recargar_Vinculos():\r\n\r\n\t# Uso: Recargar los vinculos en un modelo federado\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, enlaces, vinculos = [], [], []\r\n\t\r\n\t# Colectamos tipos de vinculo\r\n\tvincTipo = FilteredElementCollector(doc).OfClass(RevitLinkType) # TiposVinculo\r\n\r\n\t# Comprobamos que el modelo tenga vinculos\r\n\tif bool(vincTipo):\r\n\r\n\t\t# Descartamos los anidamientos\r\n\t\tfor x in vincTipo:\r\n\t\t\tif x.IsNestedLink:\r\n\t\t\t\tenlaces.append(x) # anidamientos\r\n\t\t\telse:\r\n\t\t\t\tvinculos.append(x) # vinculos\r\n\t\r\n\t\tfor v in vinculos:\r\n\t\t\t# Consultamos los nombres de los vinculos (descartando anidamientos)\r\n\t\t\tvincTipoNombre = v.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString()\r\n\t\r\n\t\t\t# Comprobamos el estado de los vinculos (descartando anidamientos)\r\n\t\t\testado = v.GetLinkedFileStatus()\r\n\t\r\n\t\t\t# Caso1: Vinculo ya cargado\r\n\t\t\tif estado == LinkedFileStatus.Loaded:\r\n\t\t\t\tsalida.append(\"El vinculo {} esta ya cargado\".format(vincTipoNombre))\r\n\t\r\n\t\t\t# Caso2: Vinculo descargado\r\n\t\t\telif estado == LinkedFileStatus.Unloaded:\r\n\t\t\t\t# Accedemos a todos los archivos del directorio para comprobar su ubicacion\r\n\t\t\t\tarchivos = buscar_archivosPorExtension(ruta, extension, sub=False) # rutas de los archivos rvt\r\n\r\n\t\t\t\t# Caso1: El vinculo se encuentra en el directorio\r\n\t\t\t\tif vincTipoNombre in archivos:\r\n\t\t\t\t\trutaArchivo = os.path.join(ruta, vincTipoNombre)\r\n\t\t\t\t\tmodelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(rutaArchivo)\r\n\t\t\t\t\taccion = v.LoadFrom(modelPath, None)\r\n\t\t\t\t\t# Si el vinculo ha sido cargado\r\n\t\t\t\t\tif accion.LoadResult == LinkLoadResultType.LinkLoaded:\r\n\t\t\t\t\t\tsalida.append(\"El vinculo {} ha sido cargado\".format(vincTipoNombre))\r\n\t\t\t\t\telse:\r\n\t\t\t\t\t\tsalida.append(\"El vinculo {} no ha sido cargado\".format(vincTipoNombre))\r\n\r\n\t\t\t\t# Caso2: El vinculo no se encuentra en el directorio\r\n\t\t\t\telse:\r\n\t\t\t\t\tsalida.append(\"El vinculo {} no se encuentra en el directorio\".format(vincTipoNombre))\r\n\r\n\telse:\r\n\t\tsalida = \"El modelo no tiene ningun vinculo linkado\"\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef enumerados_familiasVistas_Cpython():\r\n\r\n\t# Uso: crear un diccionario con las familias de vista (keys) y sus nombres (valores)\r\n\t\t# Nota: en \"cpython\", los enumerados vienen representados por un integer\r\n\t# Entrada:\r\n\t# Salida\r\n\r\n\t# Obtenemos los nombres de las familias de vista\r\n\tnombres = System.Enum.GetNames(ViewFamily) # valores dict\r\n\r\n\t# Obtenemos las familias\r\n\tfamilias = System.Enum.GetValues(ViewFamily) # keys dict\r\n\r\n\t# Casting de valores de familias\r\n\tclaves = [str(f) for f in familias]\r\n\t# Nota: \"cpython\" saca enumerados con integer, hacemos str para almacenar como clave en dict\r\n\r\n\treturn dict(zip(claves, nombres))\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef id_tiposFamiliasVistas():\r\n\r\n\t# Uso: crear un diccionario con las familias de vista (claves) y los Id de sus tipos\r\n\t# Entrada:\r\n\t# Salida:\r\n\r\n\t# Colectamos los tipos de vista\r\n\ttiposVista = FilteredElementCollector(doc).OfClass(ViewFamilyType).ToElements() # tipos\r\n\r\n\tdatos = dict()\r\n\r\n\tfor tv in tiposVista:\r\n\t\t# Obtenemos las familias de los tipos de vista\r\n\t\tfamiliaVista = tv.ViewFamily # familias\r\n\r\n\t\t# Si trabajamos con cpyhton\r\n\t\tif sys.implementation.name == \"cpython\":\r\n\t\t\t# Accedemos al diccionario \"enumerados_familiasVistas_Cpython()\"\r\n\t\t\tdiccionario = enumerados_familiasVistas_Cpython()\r\n\t\t\t# Sobreescribimos la variable familiaVista con un nuevo valor\r\n\t\t\tfamiliaVista = diccionario[str(familiaVista)]\r\n\r\n\t\t# Almacenamos los datos en el diccionario\r\n\t\tif familiaVista not in datos:\r\n\t\t\tdatos[str(familiaVista)] = [tv.Id]\r\n\t\telse:\r\n\t\t\tdatos[str(familiaVista)].append(tv.Id)\r\n\r\n\treturn datos\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef crear_VistayPlantilla3DPorVinculo():\r\n\r\n\t# Uso: Crear una vista 3D por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, enlaces, vinculos = [], [], []\r\n\t\r\n\t# Colectamos tipos de vinculo\r\n\tvincTipo = FilteredElementCollector(doc).OfClass(RevitLinkType) # TiposVinculo\r\n\r\n\t# Comprobamos que el modelo tenga vinculos\r\n\tif bool(vincTipo):\r\n\r\n\t\t# Descartamos los anidamientos\r\n\t\tfor x in vincTipo:\r\n\t\t\tif x.IsNestedLink:\r\n\t\t\t\tenlaces.append(x) # anidamientos\r\n\t\t\telse:\r\n\t\t\t\tvinculos.append(x) # vinculos\r\n\r\n\t\t# Generamos una vista3D por cada vinculo cargado en el modelo\r\n\t\tvtNombres, vistas3D, vistas3DNombres, vistas3DPlantNombres, plantillas = [], [], [], [], [] # listas vacias\r\n\t\tparamNoControl = List[ElementId]() # lita tipada vacia\r\n\t\tfor v in vinculos:\r\n\r\n\t\t\t# Comprobamos el estado de los vinculos (descartando anidamientos)\r\n\t\t\testado = v.GetLinkedFileStatus()\r\n\t\r\n\t\t\t# Caso1: Vinculo cargado\r\n\t\t\tif estado == LinkedFileStatus.Loaded:\r\n\r\n\t\t\t\t# Almacenamos los nombres de los vinculos (descartando anidamientos)\r\n\t\t\t\tvtNombre = v.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString()\r\n\t\t\t\tvtNombres.append(vtNombre)\r\n\r\n\t\t\t\t# Colectamos los tipos de vista\r\n\t\t\t\ttiposVista = FilteredElementCollector(doc).OfClass(ViewFamilyType).ToElements() # tipos\r\n\t\t\t\t# Obtenemos las familias de los tipos\r\n\t\t\t\ttiposVistaNombres = [x.ViewFamily for x in tiposVista] # familias\r\n\t\t\t\t# Obtenemos el id del tipo de vista 3D\r\n\t\t\t\ttipoVista3DId = [x.Id for x in tiposVista if str(x.ViewFamily) == \"ThreeDimensional\"][0] # IdVista3D\r\n\r\n\t\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t\t# abrimos transaccion\r\n\r\n\t\t\t\t# Creamos una vista 3D para cada vinculo cargado y las almacenamos junto a sus nombres\r\n\t\t\t\tv3D = View3D.CreateIsometric(doc, tipoVista3DId)\r\n\t\t\t\tvistas3D.append(v3D)\r\n\r\n\t\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\t\tv3DNuevoNombre = vtNombre.split(\".\")[0] + \"_Vinculo\"\r\n\t\t\t\tv3D.get_Parameter(parVN).Set(v3DNuevoNombre)\r\n\t\t\t\tvistas3DNombres.append(v3DNuevoNombre)\r\n\r\n\t\t\t\t# Creamos una plantilla de vista por vinculo y la renombramos\r\n\t\t\t\tvp = v3D.CreateViewTemplate()\r\n\r\n\t\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\t\tvpNuevoNombre = vtNombre.split(\".\")[0] + \"_Plantilla3D\"\r\n\t\t\t\tvp.get_Parameter(parVN).Set(vpNuevoNombre)\r\n\t\t\t\tvistas3DPlantNombres.append(vpNuevoNombre)\r\n\t\t\t\t\r\n\t\t\t\t# Aplicamos las plantillas de vista\r\n\t\t\t\tif v3D.Name.split(\"_\")[0] == vp.Name.split(\"_\")[0]:\r\n\t\t\t\t\tparVT = BuiltInParameter.VIEW_TEMPLATE\r\n\t\t\t\t\tv3D.get_Parameter(parVT).Set(vp.Id)\r\n\t\t\t\telse:\r\n\t\t\t\t\tpass\r\n\r\n\t\t\t\t# Obtenemos las plantillas de vista\r\n\t\t\t\t# idPlantilla = vp.Id\r\n\t\t\t\t# idPlantilla = v3D.ViewTemplateId\r\n\t\t\t\tplantilla = doc.GetElement(vp.Id)\r\n\t\t\t\tplantillas.append(plantilla)\r\n\r\n\t\t\t\t# Consultamos parametros no controlados por plantilla en las vistas\r\n\t\t\t\t# infoParametros = plantilla.GetNonControlledTemplateParameterIds()\r\n\t\t\t\t# paramNoControl.Add(infoParametros)\r\n\r\n\t\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t\t# cerramos transaccion\r\n\r\n\t\t\t# Caso2: Vinculo descargado\r\n\t\t\telse:\r\n\t\t\t\tpass\r\n\r\n\telse:\r\n\t\tsalida = \"El modelo no tiene ningun vinculo linkado\"\r\n\r\n\treturn vtNombres, vistas3D, vistas3DNombres, vistas3DPlantNombres, plantillas\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef crear_Vista3DPorVinculo():\r\n\r\n\t# Uso: Crear una vista 3D por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, enlaces, vinculos, vinculosLoaded, vinculosNotLoaded = [], [], [], [], []\r\n\t\r\n\t# Colectamos tipos de vinculo\r\n\tvincTipo = FilteredElementCollector(doc).OfClass(RevitLinkType) # TiposVinculo\r\n\r\n\t# Comprobamos que el modelo tenga vinculos\r\n\tif bool(vincTipo):\r\n\r\n\t\t# Descartamos los anidamientos\r\n\t\tfor x in vincTipo:\r\n\t\t\tif x.IsNestedLink:\r\n\t\t\t\tenlaces.append(x) # anidamientos\r\n\t\t\telse:\r\n\t\t\t\tvinculos.append(x) # vinculos\r\n\r\n\t\t# Generamos una vista3D por cada vinculo cargado en el modelo\r\n\t\tvincLoadNombres, vistas3D, vistas3DNombres, vistas3DPlantNombres, plantillas = [], [], [], [], [] # listas vacias\r\n\t\tparamNoControl = List[ElementId]() # lita tipada vacia\r\n\t\tfor v in vinculos:\r\n\r\n\t\t\t# Comprobamos el estado de los vinculos (descartando anidamientos)\r\n\t\t\testado = v.GetLinkedFileStatus()\r\n\t\r\n\t\t\t# Caso1: Vinculo cargado\r\n\t\t\tif estado == LinkedFileStatus.Loaded:\r\n\t\t\t\tvinculosLoaded.append(v)\r\n\r\n\t\t\t# Caso2: Vinculo descargado\r\n\t\t\telse:\r\n\t\t\t\tvinculosNotLoaded.append(v)\r\n\r\n\t\tfor v in vinculosLoaded:\r\n\r\n\t\t\t# Almacenamos los nombres de los vinculos cargados\r\n\t\t\tvlNombre = v.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString()\r\n\t\t\tvincLoadNombres.append(vlNombre)\r\n\t\r\n\t\t\t# Colectamos los tipos de vista\r\n\t\t\ttiposVista = FilteredElementCollector(doc).OfClass(ViewFamilyType).ToElements() # tipos\r\n\t\t\t# Obtenemos las familias de los tipos\r\n\t\t\ttiposVistaNombres = [x.ViewFamily for x in tiposVista] # familias\r\n\t\t\t# Obtenemos el id del tipo de vista 3D\r\n\t\t\ttipoVista3DId = [x.Id for x in tiposVista if str(x.ViewFamily) == \"ThreeDimensional\"][0] # IdVista3D\r\n\t\r\n\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t# abrimos transaccion\r\n\t\r\n\t\t\t# Creamos una vista 3D por vinculo cargado y las renombramos\r\n\t\t\ttry:\r\n\t\t\t\tv3D = View3D.CreateIsometric(doc, tipoVista3DId)\r\n\t\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\t\tv3DNombre = vlNombre.split(\".\")[0] + \"_Vinculo\"\r\n\t\t\t\tv3D.get_Parameter(parVN).Set(v3DNombre)\r\n\r\n\t\t\t\tv3D.LookupParameter(\"Clasificacion01\").Set(\"Trabajo\")\r\n\t\t\t\tv3D.LookupParameter(\"Clasificacion02\").Set(\"Auditoria\")\r\n\r\n\t\t\t\tvistas3D.append(v3D)\r\n\t\t\t\tvistas3DNombres.append(v3DNombre)\r\n\t\t\t\tsalida.append(\"La vista {} ha sido creada\".format(str(v3DNombre)))\r\n\r\n\t\t\texcept:\r\n\t\t\t\tsalida.append(\"La vista {} ya esta creada\".format(str(v3DNombre))) # WIP\r\n\t\r\n\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t# cerramos transaccion\r\n\r\n\telse:\r\n\t\tsalida = \"El modelo no tiene ningun vinculo linkado\"\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef crear_PlantillaPorVinculo():\r\n\r\n\t# Uso: Crear una plantilla por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida = []\r\n\r\n\t# Colectamos los tipos de vista\r\n\tcolector = FilteredElementCollector(doc).OfClass(View)\r\n\r\n\t# Filtramos por las vistas buscadas\r\n\tvistas3D = [v for v in colector if v.ViewType == ViewType.ThreeD and v.LookupParameter(\"Clasificacion02\").AsString() == \"Auditoria\" and not v.IsTemplate]\r\n\r\n\tif bool(vistas3D):\r\n\r\n\t\tfor v in vistas3D:\r\n\r\n\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t# abrimos transaccion\r\n\r\n\t\t\t# Creamos una plantilla de vista por vinculo y la renombramos\r\n\t\t\tvp = v.CreateViewTemplate()\r\n\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\tvpNombre = v.Name.split(\"_\")[0] + \"_Plantilla3D\"\r\n\t\t\tvp.get_Parameter(parVN).Set(vpNombre)\r\n\r\n\t\t\tsalida.append(vp)\r\n\r\n\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t# cerramos transaccion\r\n\r\n\telse:\r\n\t\tsalida = \"Se han borrado las vistas de Auditoria\"\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef configurar_PlantillaPorVinculo():\r\n\r\n\t# Uso: Crear una plantilla por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, vistas3DPlantNombres = [], []\r\n\r\n\t# Colectamos los tipos de vista\r\n\tcolector = FilteredElementCollector(doc).OfClass(View)\r\n\r\n\t# Filtramos por las vistas buscadas\r\n\tvistas3D = [v for v in colector if v.ViewType == ViewType.ThreeD and v.LookupParameter(\"Clasificacion02\").AsString() == \"Auditoria\"]\r\n\r\n\tif bool(vistas3D):\r\n\r\n\t\tfor v in vistas3D:\r\n\r\n\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t# abrimos transaccion\r\n\r\n\t\t\t# Creamos una plantilla de vista por vinculo y la renombramos\r\n\t\t\tvp = v.CreateViewTemplate()\r\n\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\tvpNombre = v.Name.split(\"_\")[0] + \"_Plantilla3D\"\r\n\t\t\tvp.get_Parameter(parVN).Set(vpNombre)\r\n\r\n\t\t\tvistas3DPlantNombres.append(vpNombre)\r\n\r\n\t\t\t# Aplicamos las plantillas de vista si cumplimos la condicion\r\n\t\t\tif v.Name.split(\"_\")[0] == vp.Name.split(\"_\")[0]:\r\n\t\t\t\ttry:\r\n\t\t\t\t\tparVT = BuiltInParameter.VIEW_TEMPLATE\r\n\t\t\t\t\tv.get_Parameter(parVT).Set(vp.Id)\r\n\t\t\t\t\tsalida.append(\"Se ha aplicado la plantilla {} en la vista {}\".format(vpNombre, v.Name))\r\n\t\t\t\texcept:\r\n\t\t\t\t\tsalida.append(\"La plantilla {} ya esta aplicada en la vista {}\".format(vpNombre, v.Name))\r\n\t\t\telse:\r\n\t\t\t\tsalida.append(\"No se encuentra la vista {} para aplicar la plantilla {}\".format(v.Name, vpNombre))\r\n\r\n\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t# cerramos transaccion\r\n\r\n\telse:\r\n\t\tsalida = \"No existen las vistas de Auditoria\"\r\n\r\n\treturn salida\r\n\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndef aplicar_PlantillaPorVinculo():\r\n\r\n\t# Uso: Crear una plantilla por cada vinculo cargado en el modelo\r\n\t# Entradas:\r\n\t# Salidas:\r\n\r\n\tsalida, vistas3DPlantNombres = [], []\r\n\r\n\t# Colectamos los tipos de vista\r\n\tcolector = FilteredElementCollector(doc).OfClass(View)\r\n\r\n\t# Filtramos por las vistas buscadas\r\n\tvistas3D = [v for v in colector if v.ViewType == ViewType.ThreeD and v.LookupParameter(\"Clasificacion02\").AsString() == \"Auditoria\" and not v.IsTemplate]\r\n\r\n\tif bool(vistas3D):\r\n\r\n\t\tfor v in vistas3D:\r\n\r\n\t\t\tTransactionManager.Instance.EnsureInTransaction(doc)\r\n\t\t\t# abrimos transaccion\r\n\r\n\t\t\t# Creamos una plantilla de vista por vinculo y la renombramos\r\n\t\t\tvp = v.CreateViewTemplate()\r\n\t\t\tparVN = BuiltInParameter.VIEW_NAME\r\n\t\t\tvpNombre = v.Name.split(\"_\")[0] + \"_Plantilla3D\"\r\n\t\t\tvp.get_Parameter(parVN).Set(vpNombre)\r\n\r\n\t\t\tvistas3DPlantNombres.append(vpNombre)\r\n\r\n\t\t\t# Aplicamos las plantillas de vista si cumplimos la condicion\r\n\t\t\tif v.Name.split(\"_\")[0] == vp.Name.split(\"_\")[0]:\r\n\t\t\t\ttry:\r\n\t\t\t\t\tparVT = BuiltInParameter.VIEW_TEMPLATE\r\n\t\t\t\t\tv.get_Parameter(parVT).Set(vp.Id)\r\n\t\t\t\t\tsalida.append(\"Se ha aplicado la plantilla {} en la vista {}\".format(vpNombre, v.Name))\r\n\t\t\t\texcept:\r\n\t\t\t\t\tsalida.append(\"La plantilla {} ya esta aplicada en la vista {}\".format(vpNombre, v.Name))\r\n\t\t\telse:\r\n\t\t\t\tsalida.append(\"No se encuentra la vista {} para aplicar la plantilla {}\".format(v.Name, vpNombre))\r\n\r\n\t\t\tTransactionManager.Instance.TransactionTaskDone()\r\n\t\t\t# cerramos transaccion\r\n\r\n\telse:\r\n\t\tsalida = \"No existen las vistas de Auditoria\"\r\n\r\n\treturn salida\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nruta = IN[0] # ruta de los links\r\nextension = IN[1] # extension archivos funcion\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# OUT = buscar_archivosPorExtension(ruta, extension, sub=False)\r\n# OUT = recargar_Vinculos()\r\n# OUT = crear_ParamVista3DPorVinculo() # FALTA\r\n# OUT = crear_Vista3DPorVinculo()\r\n# OUT = crear_PlantillaPorVinculo()\r\nOUT = configurar_PlantillaPorVinculo()",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "144826fb04aa45418e354a002d706e0b",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "08ce1e221951496f8ef1d45756c6fa00",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# Pandas y Numpy\r\nsys.path.append(r\"C:\\Users\\pasic\\anaconda3\\envs\\Dynamo383\\Lib\\site-packages\")\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nvinculos = UnwrapElement(IN[0][0]) # vinculos\r\nvincNombre = UnwrapElement(IN[0][1]) # vinculos\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Creamos listas para almacenar informacion\r\n# elementVincul, elementVinculCat, elementVinculCatNombre, elementVinculCatId = [], [], [], [] # listas vacias\r\n\r\n# Colectamos instancias de vinculos\r\nvincInstancia = FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()\r\n\r\n# Obtenemos los doc de los vinculos\r\ndocvinculos = [x.GetLinkDocument() for x in vincInstancia]\r\n\r\n# Obtenemos listado de categorias de Revit\r\ncatRevit = doc.Settings.Categories\r\n\r\n# Obtenemos listado de nombres de categorias de Revit\r\n# catRevitNombre = [x.Name for x in catRevit]\r\n\r\n# Obtenemos listado de ids de categorias de Revit\r\n# catRevitiD = [x.Id for x in catRevit]\r\n\r\n# Obtenemos listado de categorias de modelo de Revit\r\ncatModelo = [x for x in catRevit if x.CategoryType == CategoryType.Model]\r\n\r\n# Obtenemos listado de nombres de categorias de modelo de Revit\r\n# catModeloNombre = [x.Name for x in catModelo]\r\n\r\n# Obtenemos listado de ids de categorias de modelo de Revit\r\ncatModeloId = [x.Id for x in catModelo]\r\n\r\n# Filtramos por los Id de las categories de modelo de Revit\r\niList_catModeloId = List[ElementId](catModeloId)\r\nfiltro = ElementMulticategoryFilter(iList_catModeloId)\r\n\r\n# Obtenemos listado de builtincategories de Revit\r\n# bic = System.Enum.GetValues(BuiltInCategory)\r\n\r\n# Obtenemos listado de ids de builtincategories de Revit\r\n# bicId = [ElementId(x) for x in bic]\r\n\r\n# Obtener las etiquetas de valores de los enumerados (bic en este caso)\r\n\"\"\"\r\nfor x in bic:\r\n\ttry:\r\n\t\tbicEtiq.append(LabelUtils.GetLabelFor(x))\r\n\texcept:\r\n\t\tpass\r\n\"\"\"\r\n\r\n# Obtenemos valores del DataFrame\r\n# Leemos el archivo xlsx\r\ndf = pd.read_excel(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230215_M11.02\\xlsx\\230215_CatxVinc.xlsx\", sheet_name = \"Hoja1\", header=0, index_col=0)\r\n\r\n# Obtenemos los valores de cada columna (vinculo)\r\ndf_Arq = df[\"catModId_ARQUITECTURA\"] # Vinculo Arquitectura\r\ndf_Est = df[\"catModId_ESTRUCTURA\"] # Vinculo Estructura\r\ndf_Mep = df[\"catModId_MEP\"] # Vinculo Instalaciones\r\ndf_Ref = df[\"catModId_REFERENCIA\"] # Vinculo Referencia\r\ndf_Sit = df[\"catModId_SITUACION\"] # Vinculo Situación\r\n\r\n\r\n# Buscamos las categorias de modelo por vinculo\r\ndict_CatxVinc = {}\r\nfor x,y in zip(docvinculos, vincNombre):\r\n\r\n\t# Colectamos instancias por documento\r\n\telemVinc = FilteredElementCollector(x).WherePasses(filtro).WhereElementIsNotElementType().ToElements()\r\n\t\r\n\t# Obtenemos sus categorias\r\n\t# elemVincCat = [e.Category for e in elemVinc]\r\n\t\r\n\t# Obtenemos nombres de sus categorias\r\n\t# elemVincCatNombre = set([e.Category.Name for e in elemVinc])\r\n\t\r\n\t# Obtenemos ids de categorias\r\n\telemVincCatId = set([e.Category.Id for e in elemVinc])\r\n\r\n\t# Almacenamos la informacion\r\n\t# elementVincul.append(elemVinc)\r\n\t# elementVinculCat.append(elemVincCat)\r\n\t# elementVinculCatNombre.append(elemVincCatNombre)\r\n\t# elementVinculCatId.append(elemVincCatId)\r\n\r\n\tdict_CatxVinc[y.split(\".\")[0]] = elemVincCatId\r\n\r\n# Obtenemos las claves del diccionario ordenadas\r\ndict_CatxVinc_Claves = sorted(dict_CatxVinc.keys())\r\n\r\n# Obtenemos las columnas del excel que contienen disciplinas\r\ncolumnsDisciplinas = []\r\nfor c in df.columns:\r\n    if \"_\" in c:\r\n        columnsDisciplinas.append(c)\r\n    else:\r\n        pass\r\n\r\n# Comprobamos longitudes de keys y columnas\r\ncomprobKeysColumns = []\r\nif len(dict_CatxVinc_Claves) == len(columnsDisciplinas):\r\n    comprobKeysColumns.append(\"Numero de keys = Numero columnas disciplina excel\")\r\nelse:\r\n    comprobKeysColumns.append(\"Comprobar Numero columnas disciplinas excel\")\r\n\r\n\r\n\r\n\r\n# Accedemos a las distintas claves\r\nidARQ = []\r\nfor k in dict_CatxVinc_Claves:\r\n    if k == \"ARQUITECTURA\":\r\n        idARQ = dict_CatxVinc[k]\r\n\r\nidARQnoValido = []\r\nfor x in idARQ:\r\n    if str(x) in df[\"catModId_ARQUITECTURA\"]:\r\n        idARQnoValido.append(x)\r\n\r\nOUT = idARQ, idARQnoValido, df[\"catModId_ARQUITECTURA\"]\r\n\r\n\r\n\"\"\"\r\n# Buscamos categorias que no pertenecen a la disciplina\r\nprueba, arq, est, mep, ref, sit = [], [], [], [], [], []\r\nfor k,c in zip(dict_CatxVinc_Claves, columnsDisciplinas):\r\n    if str(k) in str(c):\r\n        #salida.append(dict_CatxVinc[k])\r\n\r\n        for str(x) in dict_CatxVinc[k]:\r\n            if str(x) not in df[c]:\r\n                prueba.append(x)\r\n\"\"\"\r\n\r\n# OUT = dict_CatxVinc_Claves, columnsDisciplinas, dict_CatxVinc\r\n# OUT = df[\"catModId_ARQUITECTURA\"]\r\n# OUT = dict_CatxVinc[\"ARQUITECTURA\"]\r\n# OUT = dict_CatxVinc_Claves[\"ARQUITECTURA\"]\r\n# OUT = dict_CatxVinc.keys(), dict_CatxVinc.values()\r\n\r\n\r\n\r\n\r\n\r\n",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "deb043ea5cfd46549d1cdf8849de53ff",
+      "Inputs": [
+        {
+          "Id": "06f8b0c245b148b486484e673cf2e246",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "a58b636502ce44c6a38cd781bd2d7a72",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# Pandas y Numpy\r\nsys.path.append(r\"C:\\Users\\pasic\\anaconda3\\envs\\Dynamo383\\Lib\\site-packages\")\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\n# ENTRADAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Obtenemos listado de categorias de Revit\r\ncatRevit = doc.Settings.Categories\r\n\r\n# Obtenemos listado de categorias de modelo de Revit\r\ncatMod = [x for x in catRevit if x.CategoryType == CategoryType.Model]\r\n\r\n# Obtenemos listado de nombres de categorias de modelo de Revit\r\ncatModNom = [x.Name for x in catRevit if x.CategoryType == CategoryType.Model]\r\n\r\n# Obtenemos listado de ids de categorias de modelo de Revit\r\ncatModId = [x.Id for x in catRevit if x.CategoryType == CategoryType.Model]\r\n\r\n# Creamos diccionario con claves para crear DataFrame\r\ndictCatMod = {\"catMod\" : catMod, \"catModNom\" : catModNom, \"catModId\" : catModId}\r\n\r\ndf = pd.DataFrame(dictCatMod)\r\n\r\n# Atributos de una serie\r\n# Existen varias propiedades o métodos para ver las características de una serie:\r\nOUT = df.size # Devuelve el número de elementos de la serie\r\nOUT = df.index # Devuelve una lista con los nombres de las filas del DataFrame\r\n# OUT = df.dtype # Devuelve el tipo de datos de los elementos de la serie\r\n\r\n# Acceso a los elementos de una serie\r\n# El acceso a los elementos puede ser a través de posiciones o través de índices (nombres)\r\n# Acceso por posición\r\nOUT = df[1:3].__repr__ # Devuelve otra serie con los elementos que ocupan las posiciones de la lista\r\n# Acceso por índice\r\nOUT = df[\"catModNom\"].__repr__ # Devuelve el elemento con el nombre nombre en el índice\r\nOUT = df[[\"catModNom\", \"catModId\"]].__repr__ # Devuelve otra serie con los elementos correspondientes a los nombres indicadas en la lista nombres en el índice\r\n\r\n# Resumen descriptivo de una serie\r\n# Las siguientes funciones permiten resumir varios aspectos de una serie:\r\nOUT = df.count() # Devuelve el número de elementos que no son nulos\r\nOUT = df.sum() # Devuelve la suma de los datos de la serie cuando los datos son de un tipo numérico, o la concatenación de ellos cuando son del tipo cadena str\r\n# OUT = df.cumsum() # Devuelve una serie con la suma acumulada de los datos de la serie cuando los datos son de un tipo numérico\r\n# OUT = df.value_counts() # Devuelve una serie con la frecuencia (número de repeticiones) de cada valor de la serie\r\nOUT = df.min() # Devuelve el menor de los datos de la serie\r\nOUT = df.max() # Devuelve el mayor de los datos de la serie\r\nOUT = df.mean() # Devuelve la media de los datos de la serie cuando los datos son de un tipo numérico\r\nOUT = df.var() # Devuelve la varianza de los datos de la serie cuando los datos son de un tipo numérico\r\nOUT = df.std() # Devuelve la desviación típica de los datos de la serie cuando los datos son de un tipo numérico\r\nOUT = df.describe() # Devuelve una serie con un resumen descriptivo que incluye el número de datos, su suma, el mínimo, el máximo, la media, la desviación típica y los cuartiles\r\n\r\n# Ordenar una serie\r\n# Para ordenar una serie se utilizan los siguientes métodos:\r\n# OUT = df.sort_values(ascending=True) # Devuelve la serie que resulta de ordenar los valores la serie. Si argumento del parámetro ascending es True el orden es creciente y si es False decreciente\r\nOUT = df.sort_index(ascending=True) # Devuelve la serie que resulta de ordenar el índice de la serie. Si el argumento del parámetro ascending es True el orden es creciente y si es False decreciente\r\n\r\n# Eliminar los dados desconocidos en una serie\r\n# Los datos desconocidos representan en Pandas por NaN y los nulos por None\r\nOUT = df.dropna() # Elimina los datos desconocidos o nulos de la serie\r\n\r\n# Exportación de ficheros\r\n# CSV\r\n# OUT = df.to_csv(fichero.csv, sep=separador, columns=booleano, index=booleano) # Exporta el DataFrame df al fichero fichero.csv en formato CSV usando como separador de los datos la cadena separador\r\n# Nota: Si se pasa True al parámetro columns se exporta también la fila con los nombres de columnas y si se pasa True al parámetro index se exporta también la columna con los nombres de las filas\r\n\r\n# EXCEL\r\n# OUT = df.to_excel(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230215_M11.02\\xlsx\\230215_Categorias.xlsx\", sheet_name = \"Hoja1\") # Exporta el DataFrame df a la hoja de cálculo hoja del fichero fichero.xlsx en formato Excel\r\n# Si se pasa True al parámetro columns se exporta también la fila con los nombres de columnas y si se pasa True al parámetro index se exporta también la columna con los nombres de las filas\r\n\r\n# Creación de un DataFrame a partir de un fichero CSV o Excel\r\n# EXCEL\r\nprueba = pd.read_excel(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230215_M11.02\\xlsx\\230215_Categorias.xlsx\", sheet_name = \"Hoja1\", header=0, index_col=0) # Devuelve un objeto del tipo DataFrame con los datos de la hoja de cálculo hoja del fichero Excel\r\n# Nota: Como nombres de columnas se utiliza los valores de la fila n y como nombres de filas los valores de la columna m. Si no se indica m se utilizan como nombres de filas los enteros empezando en 0\r\n# Nota: Los valores incluídos en la lista no-validos se convierten en NaN\r\n# Nota: Para los datos numéricos se utiliza como separador de decimales el carácter indicado en separador-decimal\r\nOUT = prueba[\"catModNom\"].__repr__ # atacar una columna en concreto\r\n\r\n# Atributos de un DataFrame\r\n# Existen varias propiedades o métodos para ver las características de un DataFrame\r\nOUT = df.info() # Devuelve información (número de filas, número de columnas, índices, tipo de las columnas y memoria usado) sobre el DataFrame\r\nOUT = df.shape # Devuelve una tupla con el número de filas y columnas del DataFrame\r\nOUT = df.size # Devuelve el número de elementos del DataFrame\r\nOUT = df.columns # Devuelve una lista con los nombres de las columnas del DataFrame\r\nOUT = df.index # Devuelve una lista con los nombres de las filas del DataFrame\r\nOUT = df.dtypes # Devuelve una serie con los tipos de datos de las columnas del DataFrame\r\nOUT = df.head(n=5).__repr__ # Devuelve las n primeras filas del DataFrame\r\nOUT = df.tail(n=5).__repr__ # Devuelve las n últimas filas del DataFrame",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "d0fc4e3b331343daaca0eaa095460b49",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "cee105667f0b4f82860ad8e62435f924",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr  # CommonLanguage Runtime\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\nuiapp = DocumentManager.Instance.CurrentUIApplication\r\napp = uiapp.Application\r\nuidoc = uiapp.ActiveUIDocument\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * \r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r'C:\\Python27\\Lib')\r\n\r\n# Pandas y Numpy\r\nimport sys\r\nimport clr\r\nsys.path.append(r\"C:\\Users\\pasic\\anaconda3\\envs\\Dynamo383\\Lib\\site-packages\")\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Crear DataFrame\r\ndicc = {\"Nombre\": [\"González, Pedro\",\"Mota, José\",\"Hernández, Ana\"],\"Edad\": [25, 48, 69],\"Sexo\": [\"masculino\", \"masculino\", \"femenino\"]}\r\ndf = pd.DataFrame(dicc)\r\n# OUT = df\r\n# Nota: Dynamo no visualiza los valores del diccionario haciendo DataFrame\r\n\r\n# Visualizar los datos (valores) del DataFrame\r\n# OUT = df.__repr__\r\n# OUT = df.values\r\n\r\n# Obtener valores de una clave\r\n# OUT = df[\"Edad\"] # todas las edades\r\n# OUT = df.Edad # todas las edades (alternativa)\r\n# OUT = df.Edad.unique() # valores unicos de todas las edades\r\n# OUT = df[\"Edad\"].max() # valor maximo de las edades\r\n# OUT = df[\"Edad\"].min() # valor minimo de las edades\r\n\r\n# Alternativa crear DataFrame\r\na = pd.DataFrame([2,3,4,5], columns = [\"numeros\"])\r\n# OUT = a\r\n# OUT = a.__repr__\r\n\r\n# Visualizar columnas del DataFrame\r\n# OUT = df.columns\r\n\r\n# Visualizar los encabezados\r\n# OUT = df.head()\r\n# OUT = df.head().__repr__\r\n\r\n# Importar base de datos (csv, excel...)\r\ntitanic = pd.read_csv(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M02_Python\\M02_Curso\\220613_M02.12\\datasets-master\\WorldDBTables\\titanic.csv\") # ruta del archivo\r\n# OUT = titanic\r\n# OUT = titanic.shape # obtenemos filas y columnas\r\n# OUT = titanic.head(5).__repr__ # vemos las primeras 5 filas\r\n# OUT = titanic.columns\r\n# OUT = titanic[\"Age\"] # por clave obtenemos todos los valores\r\n\r\n# Filtrar en un DataFrame\r\nbooleano = titanic[\"Age\"] > 35 # booleano edades mayores a 35\r\n# OUT = booleano\r\nmayorDe35 = titanic[titanic[\"Age\"] > 35]\r\n# OUT = mayorDe35.shape\r\n\r\nclases2o3 = titanic[(titanic[\"Pclass\"] == 2) | (titanic[\"Pclass\"] == 3)] # \"or\" se representa como \"|\"\r\n# clases2o3 = titanic[titanic[\"Pclass\"].isin([2,3])] # alternativa\r\n# OUT = clases2o3.shape\r\n\r\n# Insertar nueva columna en un DataFrame\r\ndf[\"ColumnaNuevaTitanic\"] = [1, 2, 3]\r\n# OUT = df\r\n\r\n# Redefinir valores para una clave\r\ndf[\"Edad\"] = [23, 67, 47]\r\n# OUT = df.__repr__\r\n\r\n# Obtener indices (filas y columnas) concretos\r\n# OUT = titanic.iloc[9:25, 2:6].__repr__\r\n\r\n# Obtener datos de edades que no sean null\r\nedadNoNull = titanic[titanic[\"Age\"].notna()]\r\n# OUT = edadNoNull.shape\r\n\r\n# Sobreescribir un valor en x filas y en x columna\r\ntitanic.iloc[0:3, 3] = \"anonimo\" # de la fila 0 a la 3 y en la columna 3 (Name)\r\n# OUT = titanic[\"Name\"]\r\n\r\n# Importar base de datos (csv, excel...)\r\nair_quality = pd.read_csv(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M02_Python\\M02_Curso\\220613_M02.12\\datasets-master\\air_quality_no2.csv\") # ruta del archivo\r\n# OUT = air_quality\r\n# OUT = air_quality.shape # obtenemos filas y columnas\r\n# OUT = air_quality.head(5).__repr__ # vemos las primeras 5 filas\r\n# OUT = air_quality.columns\r\n\r\n# Replicar valores de columna existente (station_london) a una nueva (ColumnaNuevaAir) por un factor de 1.5\r\nair_quality[\"ColumnaNuevaAir\"] = air_quality[\"station_london\"]*1.5\r\n# OUT = air_quality[\"ColumnaNuevaAir\"]\r\n# OUT = air_quality.__repr__\r\n\r\n# Crear una nueva columna mediante division\r\nair_quality[\"ColumnaNuevaRatio\"] = (air_quality[\"station_london\"] / air_quality[\"station_paris\"])\r\n# OUT = air_quality.columns\r\n\r\n# Renombrar columnas (2 opciones)\r\n# Opcion1\r\nair_quality = air_quality.rename(columns = {\"station_london\" : \"estacion_londres\", \"station_paris\" : \"estacion_paris\"})\r\n# OUT = air_quality.columns\r\n\r\n# Opcion2\r\nair_quality.rename(columns = {\"station_london\" : \"estacion_londres\", \"station_paris\" : \"estacion_paris\"}, inplace = True)\r\n# OUT = air_quality.columns\r\n\r\n# Sacar medias\r\n# OUT = titanic[\"Age\"].mean() # media\r\n# OUT = titanic[\"Age\"].median() # mediana\r\n\r\n# Agrupar por clave (Sex)\r\nmediaSex = titanic.groupby(\"Sex\").mean() # agrupamos por sexo\r\n# OUT = mediaSex.__repr__\r\n# OUT = mediaSex[\"Age\"] # obtenemos la edad media en funcion del sexo\r\n\r\n# Agrupar por claves (Sex, Pclass)\r\nmediaSexClass = titanic.groupby([\"Sex\", \"Pclass\"]).mean() # agrupamos por sexo y clase\r\n# OUT = mediaSexClass.__repr__\r\n# OUT = mediaSexClass[\"Age\"] # obtenemos la edad media en funcion del sexo y clase\r\n\r\n# Obtener numero de valores diferentes por clave\r\n# OUT = titanic[\"Pclass\"].value_counts()\r\n\r\n# Ordenar valores por clave (Edad)\r\nporEdad = titanic.sort_values(by = \"Age\", ascending = True) # de mayor a menor\r\n# OUT = porEdad.head().__repr__\r\n\r\n# Aplicar una funcion por clave\r\ndef pordos(x):\r\n    return x*2\r\n\r\n# OUT = edadNoNull[\"Age\"].apply(pordos) # multiplica cada valor de \"Age\" por 2",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "b82167b93ff4432db4548ccae8d0015b",
+      "Inputs": [
+        {
+          "Id": "a7d228b678c249569adb64c0f56c7346",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "332edd3868c44c99a2fb03dff5235b30",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr  # CommonLanguage Runtime\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\nuiapp = DocumentManager.Instance.CurrentUIApplication\r\napp = uiapp.Application\r\nuidoc = uiapp.ActiveUIDocument\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * \r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r'C:\\Python27\\Lib')\r\n\r\n# Pandas y Numpy\r\nimport sys\r\nimport clr\r\nsys.path.append(r\"C:\\Users\\pasic\\anaconda3\\envs\\Dynamo383\\Lib\\site-packages\")\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Consultar informacion de numpy\r\n# OUT = dir(np)\r\n\r\n# Diferencia entre numpy y pandas\r\n# numpy: trabaja con arrays\r\n# pandas: trabaja con data frames\r\n\r\n# Crear una matriz de numeros enteros\r\na = np.arange(45)\r\n# obtenemos una matriz plana (dynamo lo traduce como una lista de 45 elementos)\r\n# OUT = a\r\n\r\nb = a.reshape(3, 5, 3)\r\n# convertimos una matriz plana en una matriz con \"ejes\", es decir, con filas y columnas\r\n# OUT = b\r\n# obtenemos una lista con 3 sublistas con 5 sublistas cada una con 3 elementos cada una\r\n\r\n# OUT = b.shape\r\n# obtenemos la estructura de la matriz, en este caso, (3,5,3)\r\n\r\n# OUT = b.ndim\r\n# obtenemos el numero de dimensiones que tiene la matriz, en este caso, 3\r\n\r\n# OUT = b.dtype\r\n# obtenemos el tipo de datos del elemento, en este caso, int32\r\n\r\n# OUT = b.size\r\n# obtenemos el tamaño (numero de elementos), en este caso, 45\r\n\r\n# OUT = type(b)\r\n# obtenemos el tipo del elemento, en este caso, numpy.ndarray\r\n\r\n# Crear una matriz de numeros decimales\r\nc = np.linspace(0, 2, 3)\r\n# Metodo \"linspace()\"\r\n# OUT = c\r\n\r\n# Convertir listas y tuplas nativas de Python en matrices\r\nd = np.array([(1, 2, 3), (4, 5, 6)])\r\n# Metodo \"array()\"\r\n# OUT = d\r\n\r\n# Crear una matriz de numeros complejos\r\ne = np.array([[1, 2], [3, 4]], dtype=complex)\r\n# OUT = e\r\n\r\n# Crear una matriz de ceros\r\nf = np.zeros((1, 2))\r\n# obtenemos una matriz de ceros con 1 columna y 2 filas\r\n# OUT = f\r\n\r\n# Crear una matriz de unos\r\ng = np.ones((1, 2))\r\n# obtenemos una matriz de unos con 1 columna y 2 filas\r\n# OUT = g\r\n\r\n# Crear una matriz con contenido inicial aleatorio\r\nh = np.empty((1, 2))\r\n# obtenemos una matriz aleatoria con 1 columna y 2 filas\r\n# OUT = h\r\n\r\n# Operar entre arrays\r\na = np.array([20, 30, 40, 50])\r\nb = np.arange(4)\r\nc = a-b # resta\r\n# OUT = c\r\n# obtenemos una matriz tal que [20, 29, 38, 47]\r\n\r\n# OUT = b**2\r\n# obtenemos una matriz tal que [0, 29, 38, 47]\r\n\r\n# OUT = 10 * np.sin(b)\r\n\r\n# OUT = a < 35\r\n# obtenemos una matriz tal que [True, True, False, False]\r\n\r\n# OUT = a @ b\r\n# resultado de ((20*0) + (30*1) + (40*2) + (50*3)) = 260\r\n\r\n# OUT = a.dot(b)\r\n# resultado de ((20*0) + (30*1) + (40*2) + (50*3)) = 260\r\n\r\nrg = np.random.default_rng(1)\r\nrgr = rg.random((2,3))\r\n# OUT = rgr\r\n# rangos aleatorios del 0 al 1 con estructura (2 columnas, 3 filas x columna)\r\n\r\n# OUT = rgr.sum(axis = 0)\r\n# resultado de sumar los valores de las mismas filas\r\n\r\n# OUT = np.sqrt(rgr)\r\n# raiz cuadrada de cada uno de los valores\r\n\r\n# OUT = np.exp(rgr)\r\n# exponente de cada uno de los valores\r\n\r\n# Añadir 2 arrays con la misma estructura\r\na1 = np.array([20, 30, 40, 50])\r\na2 = np.array([40, 25, 65, 45])\r\n# OUT = np.add(a1, a2) # seria como una suma de valores\r\n\r\n# Utilizar numpy con funciones\r\ndef f(x,y):\r\n    return 10*x+y\r\n\r\na = np.fromfunction(f, (5,4), dtype=int)\r\n# OUT = a\r\n# crea matriz de 5 columnas, 4 filas x columna\r\n\r\n# OUT = a.shape\r\n# obtenemos la estructura de la matriz (columnas y filas)\r\n\r\n# Modificar estructura de un array\r\nb = a.reshape(4,5)\r\n# OUT = b\r\n\r\n# Transponer una matriz\r\n# OUT = b.T\r\n\r\n# Obtener el valor minimo\r\n# OUT = np.min(b)\r\n\r\n# Obtener el valor maximo\r\n# OUT = np.max(b)\r\n\r\n# Apilar matrices (podemos apilar en vertical u horizontal)\r\na = np.floor(10*rg.random((2,2)))\r\nb = np.floor(10*rg.random((2,2)))\r\napilarVert = np.vstack((a,b))\r\napilarHor = np.hstack((a,b))\r\n# OUT =a, b, apilarVert, apilarHor\r\n\r\n# Dividir matrices (podemos dividir en vertical u horizontal)\r\na = np.floor(10*rg.random((2,2)))\r\nb = np.floor(10*rg.random((2,2)))\r\ndivVert = np.vsplit(a,2) # dividir en indice 2\r\ndivHor = np.hsplit(a,2) # dividir en indice 2\r\n# OUT =a, b, divVert, divHor",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "a45d37327cb94d908c6df25d2415b6b5",
+      "Inputs": [
+        {
+          "Id": "a9cc9f1cac274d99808f0a895d182063",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "0f5056add229409882c6ba00e339d248",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr # CommonLanguage Runtime\r\nimport os\r\n\r\n# Para trabajar con geometrias en Dynamo\r\nclr.AddReference('ProtoGeometry')\r\nfrom Autodesk.DesignScript.Geometry import *\r\n\r\n# Para trabajar con nodos de DSCore Node: List, Math, etc\r\nclr.AddReference('DSCoreNodes')\r\nimport DSCore\r\nfrom DSCore import *\r\n\r\n# Para trabajar con nodos nativos de Revit: Ojo con las conversiones\r\nclr.AddReference('RevitNodes')\r\nimport Revit\r\nclr.ImportExtensions(Revit.Elements) # nos permite trabajar con elementos\r\nclr.ImportExtensions(Revit.GeometryConversion) # nos permite convertir geometrias\r\n\r\n# Recurso para acceder a la API de Dynamo\r\nclr.AddReference(\"DynamoRevitDS\") # para acceder a la interfaz de Dynamo\r\nimport Dynamo\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar con la RevitAPIUI\r\nclr.AddReference('RevitAPIUI') # para trabajar con la interfaz de Revit\r\nimport Autodesk\r\nfrom Autodesk.Revit.UI import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument # para llamar al documento\r\nuiapp = DocumentManager.Instance.CurrentUIApplication # para actuar contra el documento\r\napp = uiapp.Application # para trabajar con la interfaz\r\nuidoc = uiapp.ActiveUIDocument # para seleccionar en el documento\r\n\r\n# Mis funciones: nos podemos importar nuestro archivo llamado \"Funciones.py\"\r\nimport sys\r\nsys.path.append(r\"C:\\Users\\pasic\\Documents\\Dynamo\\Funciones\") # ruta del archivo \"Funciones.py\"\r\n#import Funciones # hace referencia al archivo \"Funciones.py\"\r\n#from Funciones import * # importamos las funciones que queramos o todas las funciones con el \"*\"\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import * # Para generar iList (lista fuertemente tipada)\r\n\r\n# Bibliotecas de Python\r\nsys.path.append(r\"C:\\Python27\\Lib\") # aqui estan las bibliotecas que se generan al instalarse Python\r\n\r\n# Pandas y Numpy\r\nsys.path.append(r\"C:\\Users\\pasic\\anaconda3\\envs\\Dynamo383\\Lib\\site-packages\")\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\n# FUNCIONES\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nvinculos = UnwrapElement(IN[0][0]) # vinculos\r\nvincNombre = UnwrapElement(IN[0][1]) # vinculos\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Creamos listas para almacenar informacion\r\n# elementVincul, elementVinculCat, elementVinculCatNombre, elementVinculCatId = [], [], [], [] # listas vacias\r\n\r\n# Colectamos instancias de vinculos\r\nvincInstancia = FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()\r\n\r\n# Obtenemos los doc de los vinculos\r\ndocvinculos = [x.GetLinkDocument() for x in vincInstancia]\r\n\r\n# Obtenemos listado de categorias de Revit\r\ncatRevit = doc.Settings.Categories\r\n\r\n# Obtenemos listado de nombres de categorias de Revit\r\n# catRevitNombre = [x.Name for x in catRevit]\r\n\r\n# Obtenemos listado de ids de categorias de Revit\r\n# catRevitiD = [x.Id for x in catRevit]\r\n\r\n# Obtenemos listado de categorias de modelo de Revit\r\ncatModelo = [x for x in catRevit if x.CategoryType == CategoryType.Model]\r\n\r\n# Obtenemos listado de nombres de categorias de modelo de Revit\r\n# catModeloNombre = [x.Name for x in catModelo]\r\n\r\n# Obtenemos listado de ids de categorias de modelo de Revit\r\ncatModeloId = [x.Id for x in catModelo]\r\n\r\n# Filtramos por los Id de las categories de modelo de Revit\r\niList_catModeloId = List[ElementId](catModeloId)\r\nfiltro = ElementMulticategoryFilter(iList_catModeloId)\r\n\r\n# Obtenemos listado de builtincategories de Revit\r\n# bic = System.Enum.GetValues(BuiltInCategory)\r\n\r\n# Obtenemos listado de ids de builtincategories de Revit\r\n# bicId = [ElementId(x) for x in bic]\r\n\r\n# Obtener las etiquetas de valores de los enumerados (bic en este caso)\r\n\"\"\"\r\nfor x in bic:\r\n\ttry:\r\n\t\tbicEtiq.append(LabelUtils.GetLabelFor(x))\r\n\texcept:\r\n\t\tpass\r\n\"\"\"\r\n\r\n# Obtenemos valores del DataFrame\r\n# Leemos el archivo xlsx\r\ndf = pd.read_excel(r\"C:\\Users\\pasic\\Google Drive\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230215_M11.02\\xlsx\\230215_CatxVinc.xlsx\", sheet_name = \"Hoja1\", header=0, index_col=0)\r\n\r\n# Obtenemos los valores de cada columna (vinculo)\r\ndf_Arq = df[\"catModId_ARQUITECTURA\"] # Vinculo Arquitectura\r\ndf_Est = df[\"catModId_ESTRUCTURA\"] # Vinculo Estructura\r\ndf_Mep = df[\"catModId_MEP\"] # Vinculo Instalaciones\r\ndf_Ref = df[\"catModId_REFERENCIA\"] # Vinculo Referencia\r\ndf_Sit = df[\"catModId_SITUACION\"] # Vinculo Situación\r\n\r\n\r\n# Buscamos las categorias de modelo por vinculo\r\ndict_CatxVinc = {}\r\nfor x,y in zip(docvinculos, vincNombre):\r\n\r\n\t# Colectamos instancias por documento\r\n\telemVinc = FilteredElementCollector(x).WherePasses(filtro).WhereElementIsNotElementType().ToElements()\r\n\t\r\n\t# Obtenemos sus categorias\r\n\t# elemVincCat = [e.Category for e in elemVinc]\r\n\t\r\n\t# Obtenemos nombres de sus categorias\r\n\t# elemVincCatNombre = set([e.Category.Name for e in elemVinc])\r\n\t\r\n\t# Obtenemos ids de categorias\r\n\telemVincCatId = set([e.Category.Id for e in elemVinc])\r\n\r\n\t# Almacenamos la informacion\r\n\t# elementVincul.append(elemVinc)\r\n\t# elementVinculCat.append(elemVincCat)\r\n\t# elementVinculCatNombre.append(elemVincCatNombre)\r\n\t# elementVinculCatId.append(elemVincCatId)\r\n\t\r\n\tdict_CatxVinc[y.split(\".\")[0]] = elemVincCatId\r\n\r\n# Obtenemos las claves del diccionario ordenadas\r\ndict_CatxVinc_Claves = sorted(dict_CatxVinc.keys())\r\n\r\n# Obtenemos las columnas del excel que contienen las disciplinas\r\ncolumnsDisciplinas = []\r\nfor c in df.columns:\r\n    if \"_\" in c:\r\n        columnsDisciplinas.append(c)\r\n    else:\r\n        pass\r\n\r\n# Buscamos categorias que no pertenecen a la disciplina\r\nsalida = []\r\nfor k,c in zip(dict_CatxVinc_Claves, columnsDisciplinas):\r\n    if str(k) in str(columnsDisciplinas):\r\n        for x in dict_CatxVinc[\"k\"]:\r\n            if x not in df[\"c\"]:\r\n                salida.append(x)\r\n        #prueba.append(k)\r\n    else:\r\n        salida.append(\"No se encuentra la columna en cuestion\")\r\n\r\nOUT = salida\r\n\r\n\r\n\r\n\r\n",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "9dd28324826a410b8621353115fa101d",
+      "Inputs": [
+        {
+          "Id": "980a47a85d044f31a19ffe65bf084c9a",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "944e0610b80b44e3b4f93d4109fd7f81",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr\r\n# Importar RevitAPI\r\nclr.AddReference(\"RevitAPI\")\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\nimport Autodesk.Revit.DB as DB\r\n\r\n# Importar DocumentManager y TransactionManager\r\nclr.AddReference(\"RevitServices\")\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\nfrom System.Collections.Generic import *\r\n\r\nimport sys\r\nsys.path.append(r'C:\\Program Files (x86)\\IronPython 2.7\\Lib') #Bibliotecas Python\r\nimport os #Sistema Operativo\r\nimport traceback #Guardar excepciones\r\n\r\n#Documento actual e Interfaz de Usuario.\r\ndoc =  DocumentManager.Instance.CurrentDBDocument\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Obtenemos la informacion de proyecto\r\ninfoPro = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_ProjectInformation).FirstElement()\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n# abrimos transaccion\r\n\r\n# Accedemos al parametro \"PROJECT_NAME\"\r\nparam = infoPro.get_Parameter(BuiltInParameter.PROJECT_NAME)\r\n\r\n# Asignamos nombre al parametro \"PROJECT_NAME\"\r\nparam.Set(\"Estrella de la muerte\")\r\n\r\n# Obtener Configuracion de analisis de ruta\r\nrouteSett = Analysis.RouteAnalysisSettings.GetRouteAnalysisSettings(doc)\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n# cerramos transaccion\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Accedemos a los parametros de informacion de proyecto\r\nOUT = infoPro.Parameters",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "0f56a92ada034594b816d077a43aea3b",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "8439d098e5454086894e5c9211f17176",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.Directory, CoreNodeModels",
+      "HintPath": "C:\\Habitat\\Users\\kevinhimmelreich\\OneDrive - PROMOCIONES HABITAT SA\\Escritorio\\ITTI_Dynamo_Python_Abril22\\TXT",
+      "InputValue": "C:\\Habitat\\Users\\kevinhimmelreich\\OneDrive - PROMOCIONES HABITAT SA\\Escritorio\\ITTI_Dynamo_Python_Abril22\\TXT",
+      "NodeType": "ExtensionNode",
+      "Id": "9a86af35e4a24e7a92ac6e66cb0d6e70",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "a6ccb88114084e3299e5fe1403deed30",
+          "Name": "",
+          "Description": "Directory",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Permite seleccionar un directorio del sistema para obtener su ruta"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr\r\n# Importar RevitAPI\r\nclr.AddReference(\"RevitAPI\")\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\nimport Autodesk.Revit.DB as DB\r\n\r\n# Importar DocumentManager y TransactionManager\r\nclr.AddReference(\"RevitServices\")\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\nfrom System.Collections.Generic import *\r\n\r\nimport sys\r\nsys.path.append(r'C:\\Program Files (x86)\\IronPython 2.7\\Lib') #Bibliotecas Python\r\nimport os #Sistema Operativo\r\nimport traceback #Guardar excepciones\r\n\r\n#Para imprimir Bitmap\r\nimport System\r\n#Documento actual e Interfaz de Usuario.\r\ndoc =  DocumentManager.Instance.CurrentDBDocument\r\n\r\n# ENTRADA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\ndirec = IN[0] # ruta donde ubicar el archivo txt\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Crear txt par compartidos\r\nfileStream = System.IO.File.Create(direc + \"\\\\\" + \"ITTI_Shared.txt\")\r\nfileStream.Close()\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = fileStream",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "8ee67f1559484eb1a24271eb821d7765",
+      "Inputs": [
+        {
+          "Id": "8e8ead35d1d34e7e883417faca63582d",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "b313cf6b30ac40bbacf769cf920448de",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr\r\n# Importar RevitAPI\r\nclr.AddReference(\"RevitAPI\")\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\nimport Autodesk.Revit.DB as DB\r\n\r\n# Importar DocumentManager y TransactionManager\r\nclr.AddReference(\"RevitServices\")\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\nfrom System.Collections.Generic import *\r\n\r\nimport sys\r\nsys.path.append(r'C:\\Program Files (x86)\\IronPython 2.7\\Lib') #Bibliotecas Python\r\nimport os #Sistema Operativo\r\nimport traceback #Guardar excepciones\r\n\r\n#Documento actual e Interfaz de Usuario.\r\ndoc =  DocumentManager.Instance.CurrentDBDocument\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n\r\n# Sacamos un iterador\r\niterador = doc.ParameterBindings.ForwardIterator()\r\n# Metodo \"ForwardIterator()\": Retrieve a forward moving iterator to the map\r\n    # sin Argumentos\r\n    # cuelga de \"DefinitionBindingMap Class\": A map that contains mappings of parameter definitions to parameter bindings\r\n\r\n# Colectamos el primer elemento de los suelos\r\nsuelo = FilteredElementCollector(doc).OfClass(Floor).FirstElement()\r\n\r\nsalida = []\r\nwhile iterador.MoveNext():\r\n    nombre = iterador.Key.Name # nombres de los par compartidos\r\n    id = iterador.Key.Id # ids de los par compartidos\r\n    # grupoPar = iterador.Key.ParameterGroup # grupo de parametro\r\n    grupoPar = iterador.Key.GetGroupTypeId() # alternativa grupo de parametro (ForgeTypeId)\r\n    tipoUnidad = iterador.Key.GetDataType() # UnitType\r\n    salida.append(nombre)\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Obtenemos un listado de todos los parametros compartidos\r\nOUT = iterador\r\n\r\n# Obtenemos todos los parametros del suelo colectado\r\nOUT = suelo.Parameters\r\n\r\n# Obtenemos todos los par compartidos del suelo colectado\r\nparcomp = [x for x in suelo.Parameters if x.IsShared]\r\nOUT = parcomp\r\n\r\n# Obtenemos todos los par no compartidos del suelo colectado\r\nparnocomp = [x for x in suelo.Parameters if not x.IsShared]\r\nOUT = parnocomp\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n# abrimos transaccion\r\n\r\n# Borramos par compartidos\r\n[doc.Delete(x.Id) for x in parcomp]\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n# cerramos transaccion",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "c0e955360c084a46b7bb89da4882365b",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "aa121564e048444a9f512af3dd7575ad",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr  # CommonLanguage Runtime\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\nuiapp = DocumentManager.Instance.CurrentUIApplication\r\napp = uiapp.Application\r\nuidoc = uiapp.ActiveUIDocument\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import *  # Para generar iList\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Accedemos al archivo txt que sale por defecto en nuestro documento\r\n# sharedParam = app.OpenSharedParameterFile()\r\n# Metodo \"OpenSharedParameterFile()\": Enables access to shared parameter groups and definitions that are maintained on disk\r\n\t# sin Argumentos\r\n\t# cuelga de \"ControlledApplication Class\": Represents the Autodesk Revit Application with no access to documents. It provides options and other application wide data and settings for external applications OnStartup/OnShutdown\r\n\r\n# Accedemos a la ruta del archivo txt que sale por defecto en nuestro documento\r\narchivoOrg = app.SharedParameterFileName\r\n# Propiedad \"SharedParameterFileName\": Contains the fully qualified path to a shared parameters file\r\n\t# cuelga de \"ControlledApplication Class\": Represents the Autodesk Revit Application with no access to documents. It provides options and other application wide data and settings for external applications OnStartup/OnShutdown\r\n\r\n# Sobreescribimos la ruta mediante el input IN[0]\r\napp.SharedParameterFileName = IN[0]\r\n\r\n# Accedemos a los grupos de parametros del txt\r\nSharedParameterFile = app.OpenSharedParameterFile()\r\n# Metodo \"OpenSharedParameterFile()\": Enables access to shared parameter groups and definitions that are maintained on disk\r\n\t# sin Argumentos\r\n\t# cuelga de \"Application Class\": Represents the Autodesk Revit Application, providing access to documents, options and other application wide data and settings\r\n\r\n# Seleccionamos el grupo de parametros \"Dynamo\" dentro del txt\r\ngrupo = SharedParameterFile.Groups.get_Item(\"Dynamo\")\r\n\r\n# Creamos un nuevo grupo de parametros \"ITTI_2022\"\r\nSharedParameterFile.Groups.Create(\"ITTI_2022\")\r\n\r\n# Seleccionar el parametro compartido \"PruebaCargaDynamo\" dentro del grupo \"Dynamo\"\r\ndefinicion = grupo.Definitions.get_Item(\"PruebaCargaDynamo\")\r\n\r\n# Crear parametro compartido \"External Definition\" en el txt\r\n# Crear opciones y definicion 2021\r\nopc2021 = ExternalDefinitionCreationOptions(\"NombreParam\", ParameterType.Text)\r\nopc2021.UserModificable = True\r\nopc2021.Description = \"Parametro añadido desde Python\"\r\ndefinicion = grupo.Definition.Create(opc2021)\r\n\r\n# Version Revit 2022 en adelante\r\nopc2022 = ExternalDefinitionCreationOptions(\"NombreParam\", SpecTypeId.String.Text)\r\nopc2022.UserModificable = True\r\nopc2022.Description = \"Parametro creado desde Python\"\r\ndefinicion = grupo.Definitions.Create(opc2022)\r\n\r\n# Categorias a las que asignar el parametro\r\n# Creamos conjunto de categorias fuertemente tipado\r\ncatSet1 = app.Create.NewCategorySet()\r\n# Metodo \"NewCategorySet()\": Creates a new instance of a set specifically for holding category objects\r\n\t# sin Argumentos\r\n\t# cuelga de \"Application Class\": Represents the Autodesk Revit Application, providing access to documents, options and other application wide data and settings\r\n\r\n# Creamos conjunto de categorias fuertemente tipado (alternativa a \"NewCategorySet()\")\r\ncatSet2 = CategorySet()\r\n\r\n# Obtenemos la categoria de suelos desde su BuiltInCategory\r\ncat = Category.GetCategory(doc, BuiltInCategory.OST_Floors)\r\n\r\n# Insertamos la categoria en el conjunto\r\ncatSet1.Insert(cat)\r\ncatSet2.Insert(cat)\r\n\r\n# Crear enlace \"Binding\"\r\n# TypeBinding: para parametros de Tipo\r\ntypBin1 = app.Create.NewTypeBinding(catSet1)\r\ntypBin2 = TypeBinding(catSet2)\r\n\r\n# InstanceBinding: para parametros de Ejemplar\r\ninsBin1 = app.Create.NewInstanceBinding(catSet1)\r\ninsBin2 = InstanceBinding(catSet2)\r\n\r\n# Definimos el \"Agrupar parametro en\", en este caso \"Texto\"\r\ngrupoDeseado = BuiltInParameterGroup.PG_TEXT\r\n\r\n# Cuando no queremos asignar ningun grupo\r\n# BuiltInParameterGroup.INVALID\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n# abrimos transaccion\r\n\r\n# Insertamos el parametro compartido como parametro de proyecto\r\ndoc.ParameterBindings.Insert(definicion, insBin2, grupoDeseado)\r\n\r\n# Reinsertar un parametro compartido como parametro de proyecto porque se ha modificado\r\ndoc.ParameterBindings.ReInsert(definicion, insBin2, grupoDeseado)\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n# cerramos transaccion\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nOUT = insBin1, insBin2",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "4ab77b5b2a144a32b333e81ce7752a16",
+      "Inputs": [
+        {
+          "Id": "d4fe6762da5843b18f3cfbea4acaec64",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "1566fe27637b444c80d872db2ea99ded",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.Filename, CoreNodeModels",
+      "HintPath": "G:\\Mi unidad\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230315_M11.03\\dyn\\No hay ningún archivo seleccionado",
+      "InputValue": "No hay ningún archivo seleccionado.",
+      "NodeType": "ExtensionNode",
+      "Id": "61899072aa1b4109a23d29d190b9e000",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "d870789e8e314e478343ab097e83102a",
+          "Name": "",
+          "Description": "Filename",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Permite seleccionar un archivo del sistema para obtener su nombre de archivo"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "NodeType": "StringInputNode",
+      "InputValue": "220629_M03.08",
+      "Id": "fd46b2975f2140568e67e8f075f39307",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "f08bfee013124a9aaeca00e74b887365",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Crea una cadena"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# BIBLIOTECAS\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\nimport clr  # CommonLanguage Runtime\r\n\r\n# Para trabajar con la RevitAPI\r\nclr.AddReference('RevitAPI')\r\nimport Autodesk\r\nfrom Autodesk.Revit.DB import *\r\n\r\n# Para trabajar contra el documento y hacer transacciones\r\nclr.AddReference('RevitServices')\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n# Identificadores\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\nuiapp = DocumentManager.Instance.CurrentUIApplication\r\napp = uiapp.Application\r\nuidoc = uiapp.ActiveUIDocument\r\n\r\n# Otras bibliotecas\r\nimport System\r\nfrom System.Collections.Generic import *  # Para generar iList\r\n\r\n# CODIGO\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\r\n# Accedemos al archivo txt que sale por defecto en nuestro documento\r\n# sharedParam = app.OpenSharedParameterFile()\r\n\r\n# Accedemos a la ruta del archivo txt que sale por defecto en nuestro documento\r\narchivoOrig = app.SharedParametersFilename\r\n\r\n# Sobreescribimos la ruta mediante el input IN[0]\r\narchivoOrig = IN[0]\r\n\r\n# Abrimos el archivo enlazado\r\nsharedParam = app.OpenSharedParameterFile()\r\n\r\n# Creamos el grupo de parametros del txt si no existe\r\nif sharedParam.Groups.get_Item(\"ClashDetection\"):\r\n    grupo3D = sharedParam.Groups.get_Item(\"ClashDetection\")\r\nelse:\r\n    grupo3D = sharedParam.Groups.Create(\"ClashDetection\")\r\n\r\n# Crear parametro compartido \"External Definition\" en el txt si no existe\r\n# Version Revit 2022 en adelante\r\nif grupo3D.Definitions.get_Item(\"3D\"):\r\n    definicion = grupo3D.Definitions.get_Item(\"3D\")\r\nelse:\r\n    extOpc = ExternalDefinitionCreationOptions(\"3D\", SpecTypeId.String.Text)\r\n    extOpc.UserModificable = True\r\n    extOpc.Description = \"Parametro añadido desde Python\"\r\n    definicion = grupo3D.Definitions.Create(extOpc)\r\n\r\n# Creamos conjunto de categorias fuertemente tipado\r\ncatSet = app.Create.NewCategorySet()\r\n\r\n# Obtenemos las categorias desde su BuiltInCategory\r\n# Arquitectura\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Floors))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Ramps))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Windows))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Doors))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Ceilings))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_CurtainWallPanels))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_CurtainWallMullions))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Railings))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Roofs))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Stairs))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Walls))\r\n\r\n# Estructura\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralFoundation))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralFraming))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralColumns))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Columns))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_CeilingsStructure))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralTendons))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralTruss))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_StructuralFramingSystem))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_TemporaryStructure))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_FloorsStructure))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_RoofsStructure))\r\n# catSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_WallsStructure))\r\n\r\n# MEP\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_PipeCurves))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_PipeFitting))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_PipeAccessory))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_FlexPipeCurves))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_DuctCurves))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_DuctFitting))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_DuctAccessory))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_FlexDuctCurves))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_DuctTerminal))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_MechanicalEquipment))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_PlumbingFixtures))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Sprinklers))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_CableTray))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_CableTrayFitting))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_Conduit))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_ConduitFitting))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_ElectricalEquipment))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_LightingDevices))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_LightingFixtures))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_DataDevices))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_FireAlarmDevices))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_ElectricalFixtures))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_SpecialityEquipment))\r\ncatSet.Insert(Category.GetCategory(doc, BuiltInCategory.OST_MedicalEquipment))\r\n\r\n# Creamos enlace \"Binding\"\r\n# TypeBinding: para parametros de Tipo\r\n# InstanceBinding: para parametros de Ejemplar\r\ninsBin = app.Create.NewInstanceBinding(catSet)\r\n\r\n# Definimos el \"Agrupar parametro en\", en este caso \"Otros\"\r\ngrupoProp = BuiltInParameterGroup.PG_TEXT\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n# abrimos transaccion\r\n\r\n# Insertamos el parametro compartido como parametro de proyecto en el documento\r\ndoc.ParameterBindings.Insert(definicion, insBin, grupoProp)\r\n\r\n# Reinsertar un parametro compartido como parametro de proyecto porque se ha modificado\r\n# doc.ParameterBindings.ReInsert(definicion, insBin, grupoProp)\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n# cerramos transaccion\r\n\r\n# Insertamos el parametro compartido como parametro de proyecto en los vinculos\r\n# Colectamos los documentos de los vinculos\r\nvinculos = FilteredElementCollector(doc).OfClass(RevitLinkInstance)\r\ndocVinculos = [v.GetLinkDocument() for v in vinculos]\r\nPathdocVinculos = [v.GetLinkDocument().PathName for v in vinculos]\r\n\r\nTransactionManager.Instance.ForceCloseTransaction()\r\n# forzamos transaccion\r\n\r\nfor x in PathdocVinculos:\r\n    linkDoc = app.OpenDocumentFile(x)\r\n    \r\n    \r\n    \r\n    linkDoc.Close()\r\n    linkDoc.Reload()\r\n\r\n\r\n\r\n\r\n\r\n\r\n\"\"\"\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n# abrimos transaccion\r\n\r\nfor d in docVinculos:\r\n    d.ParameterBindings.Insert(definicion, insBin, grupoProp)\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n# cerramos transaccion\r\n\r\n# SALIDA\r\n# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\r\n\"\"\"",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "49f306381c4440af8da4314d91315941",
+      "Inputs": [
+        {
+          "Id": "63ed7ac8622544849b89f3c146e9a32c",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "11b1e54f18bd495cb82d78b400c76fbe",
+          "Name": "OUT",
+          "Description": "Resultado de la secuencia de comandos de Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Ejecuta una secuencia de comandos de Python incrustada."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.Filename, CoreNodeModels",
+      "HintPath": "G:\\Mi unidad\\0-FORMACION\\ITTI-Automatizacion en Procesos BIM\\RECURSOS\\M11_TFM\\M11_Personal\\230315_M11.03\\txt\\230315_ParamComp.txt",
+      "InputValue": "..\\txt\\230315_ParamComp.txt",
+      "NodeType": "ExtensionNode",
+      "Id": "3263b9ac6c9447248607c69b555f4ca3",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "bac8a49f6f44433c87d6ab79805bc22b",
+          "Name": "",
+          "Description": "Filename",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Permite seleccionar un archivo del sistema para obtener su nombre de archivo"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "1583ec9bb92442e087ffccfca01c9228",
+      "End": "ebb46fcec75b46e8850e31d13ac07337",
+      "Id": "9fe8a8ecfdaf4416ab11073f58e99555"
+    },
+    {
+      "Start": "1583ec9bb92442e087ffccfca01c9228",
+      "End": "06f8b0c245b148b486484e673cf2e246",
+      "Id": "a67bd945a7bb4dce85447d1748d35520"
+    },
+    {
+      "Start": "1583ec9bb92442e087ffccfca01c9228",
+      "End": "980a47a85d044f31a19ffe65bf084c9a",
+      "Id": "dc7af811b1f24b6aa9e0b09e3b27e2fd"
+    },
+    {
+      "Start": "9c31e710ffa842e383280f2ad462e04f",
+      "End": "9a8762dc10f14415937273ad9974b1d3",
+      "Id": "72abdf8186d146ecb868d448d9d19f61"
+    },
+    {
+      "Start": "de7bcd427cec4310a465b4eae33245a3",
+      "End": "a6cd261f841040b29a7d8a3f4a3dce73",
+      "Id": "ff1c4edf4ac8459cb4c1a847e6f485c5"
+    },
+    {
+      "Start": "71779893d320446fadfbe9ea56ee5ac1",
+      "End": "d24a1b7ae12843d4a32aa7d84a3c73ed",
+      "Id": "bfc723d1c4974485a293067a714b3923"
+    },
+    {
+      "Start": "71779893d320446fadfbe9ea56ee5ac1",
+      "End": "22714c4dc8474fd2b6731e391f0f78d9",
+      "Id": "5842d53b021346f8bf2c56039a591d2d"
+    },
+    {
+      "Start": "fb97db2cedc04065a55a76baf8569c30",
+      "End": "3088eea519df429084abe627506f71b5",
+      "Id": "89be1cb4bacf477b82b3c1473dc190bb"
+    },
+    {
+      "Start": "a6ccb88114084e3299e5fe1403deed30",
+      "End": "8e8ead35d1d34e7e883417faca63582d",
+      "Id": "4c5be19207224ecbb11a03e87fe0a27a"
+    },
+    {
+      "Start": "d870789e8e314e478343ab097e83102a",
+      "End": "d4fe6762da5843b18f3cfbea4acaec64",
+      "Id": "0dc3efb3c66441b3b7ca5e412296ca0d"
+    },
+    {
+      "Start": "bac8a49f6f44433c87d6ab79805bc22b",
+      "End": "63ed7ac8622544849b89f3c146e9a32c",
+      "Id": "335aff42bbf140e09e32a35f5a87e6be"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.10.1.3976",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Vista preliminar en segundo plano",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "0cd857003a6046d1ab7fdf6bd8220729",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 664.38645518766,
+        "Y": 393.551675145954
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "String",
+        "Id": "1bd95732cc224675976f57729d24369f",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 340.0,
+        "Y": 230.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Code Block",
+        "Id": "c994c219cfbf456baacf293a9fb6b0bb",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 447.07314558461985,
+        "Y": 420.37344867869496
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "075e2f9dc698407e8d06fa6f8621366a",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 980.03168136182012,
+        "Y": 351.80794190691142
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "3740a1e4fd6f425fbf2406c8e130c7de",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1300.2697514238764,
+        "Y": 351.74311915588993
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "13a2acb9f5a0411c8aa886be14e9a307",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1560.9638615546396,
+        "Y": 482.54714237611597
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "144826fb04aa45418e354a002d706e0b",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1737.2626587156597,
+        "Y": 524.14223136853684
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "deb043ea5cfd46549d1cdf8849de53ff",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1428.5291827342855,
+        "Y": 759.71240479245193
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "d0fc4e3b331343daaca0eaa095460b49",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1942.51190615708,
+        "Y": 350.85646415703241
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "b82167b93ff4432db4548ccae8d0015b",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 2067.0909748928252,
+        "Y": 122.10821940158837
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "a45d37327cb94d908c6df25d2415b6b5",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1874.585351991125,
+        "Y": 119.35080044491895
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "9dd28324826a410b8621353115fa101d",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1431.597075873226,
+        "Y": 899.91715914489191
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "ProjectInfo",
+        "Id": "0f56a92ada034594b816d077a43aea3b",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1885.4048807765639,
+        "Y": -148.49071415203093
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Directory Path",
+        "Id": "9a86af35e4a24e7a92ac6e66cb0d6e70",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1299.3146614441039,
+        "Y": -274.9906053408406
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "8ee67f1559484eb1a24271eb821d7765",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1645.9427125561933,
+        "Y": -234.60947294597077
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "c0e955360c084a46b7bb89da4882365b",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 1068.7019973204542,
+        "Y": -231.75524680637068
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "4ab77b5b2a144a32b333e81ce7752a16",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": true,
+        "X": 837.1393083045632,
+        "Y": -230.35450209229089
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Archivo txt",
+        "Id": "61899072aa1b4109a23d29d190b9e000",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 552.657022722814,
+        "Y": -272.93862070290083
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Clase",
+        "Id": "fd46b2975f2140568e67e8f075f39307",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 267.12660968668388,
+        "Y": -271.89583593242082
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "49f306381c4440af8da4314d91315941",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 624.18225821073156,
+        "Y": 1457.8287254823722
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Archivo txt",
+        "Id": "3263b9ac6c9447248607c69b555f4ca3",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 339.699972628983,
+        "Y": 1415.9835831599048
+      }
+    ],
+    "Annotations": [
+      {
+        "Id": "60b68e9a90ae4dc28a95abc0fa5c35ab",
+        "Title": "Buscar archivos y Recargar vínculos",
+        "Nodes": [
+          "0cd857003a6046d1ab7fdf6bd8220729"
+        ],
+        "Left": 654.38645518766,
+        "Top": 167.551675145954,
+        "Width": 144.0,
+        "Height": 356.33333333333331,
+        "FontSize": 36.0,
+        "InitialTop": 393.551675145954,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 216.0,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "2b45f33e71e44c629077e85a3ad35c32",
+        "Title": "IN",
+        "Nodes": [
+          "1bd95732cc224675976f57729d24369f",
+          "c994c219cfbf456baacf293a9fb6b0bb"
+        ],
+        "Left": 330.0,
+        "Top": 176.66666666666666,
+        "Width": 237.33333333333337,
+        "Height": 338.04011534536164,
+        "FontSize": 36.0,
+        "InitialTop": 230.0,
+        "InitialHeight": 335.373448678695,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FFFFAA45"
+      },
+      {
+        "Id": "6264d396cb314986a57c557fc302fa8f",
+        "Title": "Crear vista3D por vínculo",
+        "Nodes": [
+          "075e2f9dc698407e8d06fa6f8621366a"
+        ],
+        "Left": 970.03168136182012,
+        "Top": 169.14127524024477,
+        "Width": 144.0,
+        "Height": 285.66666666666663,
+        "FontSize": 36.0,
+        "InitialTop": 351.80794190691142,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 172.66666666666666,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "806dd39b4c974c898000a785bdb6d828",
+        "Title": "Crear plantilla vista por vínculo",
+        "Nodes": [
+          "3740a1e4fd6f425fbf2406c8e130c7de"
+        ],
+        "Left": 1290.2697514238764,
+        "Top": 169.07645248922327,
+        "Width": 144.0,
+        "Height": 285.66666666666663,
+        "FontSize": 36.0,
+        "InitialTop": 351.74311915588993,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 172.66666666666666,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "9f60b8f74a9f4a6fb3e3514881bdc109",
+        "Title": "Aplicar plantilla vista por vínculo",
+        "Nodes": [
+          "13a2acb9f5a0411c8aa886be14e9a307"
+        ],
+        "Left": 1550.9638615546396,
+        "Top": 299.88047570944934,
+        "Width": 144.0,
+        "Height": 313.0,
+        "FontSize": 36.0,
+        "InitialTop": 482.54714237611597,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 172.66666666666666,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "77a7af0e2588482a984b5442d85054e1",
+        "Title": "Configurar plantilla vista por vínculo (WIP)",
+        "Nodes": [
+          "144826fb04aa45418e354a002d706e0b"
+        ],
+        "Left": 1727.2626587156597,
+        "Top": 298.14223136853684,
+        "Width": 178.66666666666669,
+        "Height": 329.0,
+        "FontSize": 36.0,
+        "InitialTop": 524.14223136853684,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 216.0,
+        "Background": "#FFC1D676"
+      },
+      {
+        "Id": "c5291d8e2ec0463397cd351fb01dbd69",
+        "Title": "Categorías por vínculo",
+        "Nodes": [
+          "deb043ea5cfd46549d1cdf8849de53ff"
+        ],
+        "Left": 1418.5291827342855,
+        "Top": 663.04573812578531,
+        "Width": 178.75666666666669,
+        "Height": 199.66666666666663,
+        "FontSize": 36.0,
+        "InitialTop": 759.71240479245193,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 86.666666666666671,
+        "Background": "#FFC1D676"
+      },
+      {
+        "Id": "92ba1b229d6a440995de4c962e9ce568",
+        "Title": "Pandas",
+        "Nodes": [
+          "b82167b93ff4432db4548ccae8d0015b"
+        ],
+        "Left": 2057.0909748928252,
+        "Top": 68.774886068255029,
+        "Width": 144.0,
+        "Height": 156.33333333333334,
+        "FontSize": 36.0,
+        "InitialTop": 122.10821940158837,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "181d9157c71b47f0b3195e66413698aa",
+        "Title": "Numpy",
+        "Nodes": [
+          "a45d37327cb94d908c6df25d2415b6b5"
+        ],
+        "Left": 1864.585351991125,
+        "Top": 66.0174671115856,
+        "Width": 144.0,
+        "Height": 156.33333333333334,
+        "FontSize": 36.0,
+        "InitialTop": 119.35080044491895,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "28862cab7c664c01a8c88272529f6e57",
+        "Title": "DataFrame",
+        "Nodes": [
+          "d0fc4e3b331343daaca0eaa095460b49"
+        ],
+        "Left": 1932.51190615708,
+        "Top": 297.52313082369909,
+        "Width": 182.32000000000002,
+        "Height": 156.33333333333331,
+        "FontSize": 36.0,
+        "InitialTop": 350.85646415703241,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "037237dd16bb4d87a2e563302a8390bd",
+        "Title": "Parámetros de información de Proyecto",
+        "Nodes": [
+          "0f56a92ada034594b816d077a43aea3b"
+        ],
+        "Left": 1875.4048807765639,
+        "Top": -331.15738081869756,
+        "Width": 200.11,
+        "Height": 285.66666666666663,
+        "FontSize": 36.0,
+        "InitialTop": -148.49071415203093,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 172.66666666666666,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "a6c5d2b6573a4a5bb3fd9b0d45740eb2",
+        "Title": "IN",
+        "Nodes": [
+          "9a86af35e4a24e7a92ac6e66cb0d6e70"
+        ],
+        "Left": 1289.3146614441039,
+        "Top": -328.32393867417392,
+        "Width": 316.66666666666674,
+        "Height": 149.0,
+        "FontSize": 36.0,
+        "InitialTop": -274.9906053408406,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FFFFAA45"
+      },
+      {
+        "Id": "6a9efe2e15784f0abf429108a29d14ed",
+        "Title": "Crear txt par compartidos",
+        "Nodes": [
+          "8ee67f1559484eb1a24271eb821d7765"
+        ],
+        "Left": 1635.9427125561933,
+        "Top": -331.27613961263745,
+        "Width": 209.21666666666667,
+        "Height": 199.66666666666669,
+        "FontSize": 36.0,
+        "InitialTop": -234.60947294597077,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 86.666666666666671,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "35e1bad28bda45f198f35605dd28409e",
+        "Title": "Parámetros compartidos",
+        "Nodes": [
+          "c0e955360c084a46b7bb89da4882365b"
+        ],
+        "Left": 1058.7019973204542,
+        "Top": -328.42191347303736,
+        "Width": 209.21666666666667,
+        "Height": 199.66666666666669,
+        "FontSize": 36.0,
+        "InitialTop": -231.75524680637068,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 86.666666666666671,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "3c7b509e89de4dda896d1ab3173ab60f",
+        "Title": "Parámetros compartidos",
+        "Nodes": [
+          "4ab77b5b2a144a32b333e81ce7752a16"
+        ],
+        "Left": 827.1393083045632,
+        "Top": -327.02116875895757,
+        "Width": 209.21666666666667,
+        "Height": 199.66666666666669,
+        "FontSize": 36.0,
+        "InitialTop": -230.35450209229089,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 86.666666666666671,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "83ac4e2628fb4b338077c22f79c59af8",
+        "Title": "IN",
+        "Nodes": [
+          "61899072aa1b4109a23d29d190b9e000"
+        ],
+        "Left": 542.657022722814,
+        "Top": -326.27195403623415,
+        "Width": 248.0,
+        "Height": 149.0,
+        "FontSize": 36.0,
+        "InitialTop": -272.93862070290083,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FFFFAA45"
+      },
+      {
+        "Id": "82f037cfa363416880c5c1516e810199",
+        "Title": "220629_M03.08",
+        "Nodes": [
+          "fd46b2975f2140568e67e8f075f39307"
+        ],
+        "Left": 257.12660968668388,
+        "Top": -325.22916926575414,
+        "Width": 259.13666666666666,
+        "Height": 122.33333333333331,
+        "FontSize": 36.0,
+        "InitialTop": -271.89583593242082,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FFA4E1FF"
+      },
+      {
+        "Id": "e43bef6d0a3b486fbc663c0e6e3b37b3",
+        "Title": "Parámetros compartidos",
+        "Nodes": [
+          "49f306381c4440af8da4314d91315941"
+        ],
+        "Left": 614.18225821073156,
+        "Top": 1361.1620588157054,
+        "Width": 209.21666666666667,
+        "Height": 199.66666666666674,
+        "FontSize": 36.0,
+        "InitialTop": 1457.8287254823722,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 86.666666666666671,
+        "Background": "#FF48B9FF"
+      },
+      {
+        "Id": "c6e25a42a2624ac795d4af23f6269490",
+        "Title": "IN",
+        "Nodes": [
+          "3263b9ac6c9447248607c69b555f4ca3"
+        ],
+        "Left": 329.699972628983,
+        "Top": 1362.6502498265716,
+        "Width": 208.0,
+        "Height": 149.0,
+        "FontSize": 36.0,
+        "InitialTop": 1415.9835831599048,
+        "InitialHeight": 145.0,
+        "TextblockHeight": 43.333333333333336,
+        "Background": "#FFFFAA45"
+      }
+    ],
+    "X": -425.10048669184681,
+    "Y": -1212.1650751985412,
+    "Zoom": 0.93102228195269687
+  }
+}
